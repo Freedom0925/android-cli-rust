@@ -120,15 +120,15 @@ cargo test --lib
 
 Currently 356+ tests passing.
 
-## Comparison with Kotlin Original
+## Comparison with Google Original
 
-| Feature | Kotlin | Rust |
-|---------|--------|------|
+| Feature | Google Android CLI | Rust Implementation |
+|---------|-------------------|---------------------|
 | CLI Commands | 17 | 17 (100% aligned) |
 | Core Algorithms | ✓ | ✓ (100% aligned) |
 | Vision/Layout/Screen | ✓ | ✓ |
 | SDK/Skills/Metrics | ✓ | ✓ |
-| Async Operations | Coroutines | Synchronous |
+| Async Operations | Kotlin Coroutines | Synchronous |
 | Metrics Upload | HTTP POST | Local files |
 
 ## License

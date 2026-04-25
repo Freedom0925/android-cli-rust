@@ -1,8 +1,8 @@
-# Android CLI Rust vs Kotlin 差异报告
+# Android CLI Rust vs Google 原版 差异报告
 
 ## 总览
 
-| 指标 | Kotlin 原版 | Rust 实现 |
+| 指标 | Google 原版 | Rust 实现 |
 |------|-------------|-----------|
 | 文件数 | 141 | 50 |
 | 测试数 | - | 356 passed |
@@ -14,7 +14,7 @@
 
 ### 命令列表对比
 
-| Kotlin 原版 | Rust 实现 | 状态 |
+| Google 原版 | Rust 实现 | 状态 |
 |-------------|-----------|------|
 | create | create | ✅ 对齐 |
 | describe | describe | ✅ 对齐 |
@@ -40,7 +40,7 @@
 
 ### 1. Metrics 模块 (新增)
 
-| 功能 | Kotlin | Rust | 状态 |
+| 功能 | Google 原版 | Rust | 状态 |
 |------|---------|------|------|
 | MetricsConfig | AndroidCliAnalytics | MetricsConfig | ✅ 对齐 |
 | InvocationRecord | 记录命令调用 | InvocationRecord | ✅ 对齐 |
@@ -51,7 +51,7 @@
 
 ### 2. SkillsInstallLocation 模块 (新增)
 
-| 功能 | Kotlin | Rust | 状态 |
+| 功能 | Google 原版 | Rust | 状态 |
 |------|---------|------|------|
 | 42个Agent位置定义 | enum SkillsInstallLocation | SkillsInstallLocation enum | ✅ 对齐 |
 | agentName/getGlobalPath/getProjectPath | 字段方法 | agent_name/global_path/project_path | ✅ 对齐 |
@@ -61,7 +61,7 @@
 
 ### 3. interact 核心模块
 
-| 文件 | Kotlin | Rust | 状态 |
+| 文件 | Google 原版 | Rust | 状态 |
 |------|---------|------|------|
 | Point | 数据类 + getX/getY + toString "[x,y]" | Point struct + get_x/get_y + Display | ✅ 对齐 |
 | Rect | ll/ur as Point, contains(Rect), merge, l2Norm, is_empty | ll/ur as Point, contains, merge, l2_norm, is_empty | ✅ 对齐 |
@@ -72,7 +72,7 @@
 
 ### 4. interact/vision 模块
 
-| 文件 | Kotlin | Rust | 状态 |
+| 文件 | Google 原版 | Rust | 状态 |
 |------|---------|------|------|
 | ImageUtils | copyImage, toGreyscale, drawRect, drawNumber | copy_image, to_grayscale, draw_rect, draw_number | ✅ 对齐 |
 | Digits | drawDigit | draw_digit_on_buffer, draw_number_on_buffer | ✅ 对齐 |
@@ -83,7 +83,7 @@
 
 ### 5. interact/layout 模块
 
-| 文件 | Kotlin | Rust | 状态 |
+| 文件 | Google 原版 | Rust | 状态 |
 |------|---------|------|------|
 | UIElement | clazz/text/resourceId/contentDesc/index | UiNode with independent fields | ✅ 对齐 |
 | buildTree | VecDeque stack + index tracking | build_tree stack algorithm | ✅ 对齐 |
@@ -96,7 +96,7 @@
 
 ### 6. interact/commands 模块
 
-| 文件 | Kotlin | Rust | 状态 |
+| 文件 | Google 原版 | Rust | 状态 |
 |------|---------|------|------|
 | ScreenCommand.capture | capture screenshot | capture method | ✅ 对齐 |
 | ScreenCommand.annotate | UI hierarchy + vision detection | annotate_screenshot | ✅ 对齐 |
@@ -189,9 +189,9 @@ Finished `release` profile [optimized] target(s)
 
 ## 唯一差异
 
-| 功能 | Kotlin | Rust | 说明 |
-|------|---------|------|------|
-| 异步操作 | Coroutines | 同步 | Rust使用同步调用，功能逻辑一致 |
+| 功能 | Google 原版 | Rust | 说明 |
+|------|-------------|------|------|
+| 异步操作 | Kotlin Coroutines | 同步 | Rust使用同步调用，功能逻辑一致 |
 
 ---
 
@@ -206,7 +206,7 @@ Finished `release` profile [optimized] target(s)
 
 ## 总结
 
-**Rust 实现 100% 对齐 Kotlin 原版功能**
+**Rust 实现 100% 对齐 Google Android CLI 原版功能**
 
 - CLI 命令: 17/17 ✅
 - 核心算法: 全部对齐 ✅
