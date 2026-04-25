@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::{self, Write, Read, Seek};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
+use std::time::{Duration, Instant};
 
 /// GitHub repository for custom Android SDK builds
 const GITHUB_REPO: &str = "HomuHomu833/android-sdk-custom";
@@ -24,6 +26,9 @@ const DEFAULT_THREADS: usize = 4;
 
 /// Minimum chunk size for parallel download (5 MB)
 const MIN_CHUNK_SIZE: u64 = 5 * 1024 * 1024;
+
+/// Progress print interval (seconds)
+const PROGRESS_PRINT_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Supported architectures for custom SDK
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,16 +142,8 @@ impl Asset {
 
 /// Custom SDK downloader
 pub struct CustomSdkDownloader {
-    client: reqwest::blocking::Client,
+    client: Arc<reqwest::blocking::Client>,
     threads: usize,
-}
-
-/// Download progress tracker
-struct DownloadProgress {
-    total: u64,
-    downloaded: u64,
-    chunks_completed: usize,
-    total_chunks: usize,
 }
 
 impl CustomSdkDownloader {
@@ -161,7 +158,10 @@ impl CustomSdkDownloader {
             .build()
             .context("Failed to create HTTP client")?;
 
-        Ok(Self { client, threads })
+        Ok(Self {
+            client: Arc::new(client),
+            threads,
+        })
     }
 
     /// Set number of download threads
@@ -278,6 +278,14 @@ impl CustomSdkDownloader {
         if accepts_ranges && total_size >= MIN_CHUNK_SIZE && self.threads > 1 {
             self.download_parallel(&url, &archive_path, total_size)?;
         } else {
+            // Warn user why parallel download is not used
+            if !accepts_ranges {
+                println!("Warning: Server doesn't support range requests, using single-threaded download");
+            } else if total_size < MIN_CHUNK_SIZE {
+                println!("File too small for parallel download, using single thread");
+            } else if self.threads <= 1 {
+                println!("Thread count set to 1, using single-threaded download");
+            }
             self.download_single(&url, &archive_path)?;
         }
 
@@ -317,65 +325,110 @@ impl CustomSdkDownloader {
         let num_chunks = ((total_size / chunk_size) + 1) as usize;
 
         println!("Downloading {} chunks in parallel...", num_chunks);
+        println!("Each chunk: {:.1} MB", chunk_size as f64 / 1024.0 / 1024.0);
 
-        // Create output file
-        let output_file = fs::File::create(output_path)
-            .context("Failed to create output file")?;
+        // Create temp directory for chunk files
+        let temp_dir = tempfile::tempdir()
+            .context("Failed to create temp directory for chunks")?;
+        let temp_dir_path = temp_dir.path().to_path_buf();
 
-        // Pre-allocate file space
-        output_file.set_len(total_size)
-            .context("Failed to pre-allocate file")?;
+        // Use atomic counter for progress
+        let downloaded = Arc::new(AtomicU64::new(0));
+        let last_print_time = Arc::new(Mutex::new(Instant::now()));
 
-        let progress = Arc::new(Mutex::new(DownloadProgress {
-            total: total_size,
-            downloaded: 0,
-            chunks_completed: 0,
-            total_chunks: num_chunks,
-        }));
-
-        let output_path_arc = Arc::new(output_path.to_path_buf());
         let url_arc = Arc::new(url.to_string());
-        let threads = Arc::new(self.threads);
+        let client_arc = self.client.clone();
 
         // Spawn download threads
         let mut handles = Vec::new();
 
         for chunk_idx in 0..num_chunks {
             let start = chunk_idx as u64 * chunk_size;
-            let end = ((chunk_idx as u64 + 1) * chunk_size).min(total_size) - 1;
+            let end = ((chunk_idx as u64 + 1) * chunk_size).min(total_size);
+            let actual_size = end - start;
 
             let url = url_arc.clone();
-            let output_path = output_path_arc.clone();
-            let progress = progress.clone();
+            let client = client_arc.clone();
+            let temp_dir = temp_dir_path.clone();
+            let downloaded_atomic = downloaded.clone();
+            let last_print = last_print_time.clone();
+            let total = total_size;
 
             let handle = thread::spawn(move || {
-                download_chunk(&url, start, end, chunk_idx, &output_path, &progress)
+                download_chunk_to_temp(
+                    &client,
+                    &url,
+                    start,
+                    end,
+                    chunk_idx,
+                    &temp_dir,
+                    downloaded_atomic,
+                    last_print,
+                    total,
+                )
             });
 
             handles.push(handle);
         }
 
-        // Wait for all threads and check for errors
+        // Wait for all threads and collect results
         let mut errors = Vec::new();
+        let mut chunk_files: Vec<(usize, PathBuf)> = Vec::new();
+
         for (idx, handle) in handles.into_iter().enumerate() {
             match handle.join() {
                 Ok(result) => {
-                    if let Err(e) = result {
-                        errors.push((idx, e));
+                    match result {
+                        Ok(chunk_path) => {
+                            chunk_files.push((idx, chunk_path));
+                        }
+                        Err(e) => {
+                            errors.push((idx, e));
+                        }
                     }
                 }
-                Err(_) => {
-                    errors.push((idx, anyhow!("Thread panicked")));
+                Err(panic_payload) => {
+                    // Try to extract panic message
+                    let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                        s.clone()
+                    } else {
+                        "Unknown panic".to_string()
+                    };
+                    errors.push((idx, anyhow!("Thread panicked: {}", msg)));
                 }
             }
         }
 
         if !errors.is_empty() {
+            println!("Download failed:");
             for (idx, e) in &errors {
-                println!("Chunk {} failed: {}", idx, e);
+                println!("  Chunk {}: {}", idx, e);
             }
+            // Clean up temp files on failure
+            let _ = fs::remove_dir_all(&temp_dir_path);
             return Err(anyhow!("{} chunks failed to download", errors.len()));
         }
+
+        // Sort chunk files by index and combine into final file
+        chunk_files.sort_by_key(|(idx, _)| *idx);
+
+        println!("Combining {} chunks...", chunk_files.len());
+        let mut output_file = fs::File::create(output_path)
+            .context("Failed to create output file")?;
+
+        for (_idx, chunk_path) in chunk_files {
+            let mut chunk_file = fs::File::open(&chunk_path)
+                .context("Failed to open chunk file")?;
+            io::copy(&mut chunk_file, &mut output_file)
+                .context("Failed to copy chunk to output")?;
+        }
+
+        // Clean up temp files on success
+        let _ = temp_dir.close();
+
+        println!("All chunks combined successfully");
 
         Ok(())
     }
@@ -492,21 +545,26 @@ impl CustomSdkDownloader {
     }
 }
 
-/// Download a single chunk (used by parallel download threads)
-fn download_chunk(
+/// Download a single chunk to a temporary file (used by parallel download threads)
+fn download_chunk_to_temp(
+    client: &reqwest::blocking::Client,
     url: &str,
     start: u64,
     end: u64,
     chunk_idx: usize,
-    output_path: &Path,
-    progress: &Mutex<DownloadProgress>,
-) -> Result<()> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(600))
-        .build()
-        .context("Failed to create HTTP client for chunk")?;
+    temp_dir: &Path,
+    downloaded_atomic: Arc<AtomicU64>,
+    last_print: Arc<Mutex<Instant>>,
+    total: u64,
+) -> Result<PathBuf> {
+    // Create temp file for this chunk
+    let chunk_path = temp_dir.join(format!("chunk_{}.tmp", chunk_idx));
 
-    let range_header = format!("bytes={}-{}", start, end);
+    let range_header = if end > start {
+        format!("bytes={}-{}", start, end - 1)
+    } else {
+        format!("bytes={}-", start)
+    };
 
     let response = client
         .get(url)
@@ -514,24 +572,17 @@ fn download_chunk(
         .send()
         .context("Failed to request chunk")?;
 
-    if !response.status().is_success() {
+    if !response.status().is_success() && response.status() != 206 { // 206 = Partial Content
         return Err(anyhow!("Chunk {} download failed: {}", chunk_idx, response.status()));
     }
 
-    // Open file and seek to chunk position
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .open(output_path)
-        .context("Failed to open output file")?;
+    // Download chunk data to temp file
+    let mut file = fs::File::create(&chunk_path)
+        .context("Failed to create chunk temp file")?;
 
-    file.seek(io::SeekFrom::Start(start))
-        .context("Failed to seek to chunk position")?;
-
-    // Download chunk data - need mutable response for reading
     let mut response = response;
     let mut buffer = [0u8; 8192];
     let mut chunk_downloaded: u64 = 0;
-    let chunk_size = end - start + 1;
 
     loop {
         let bytes = response.read(&mut buffer)?;
@@ -541,35 +592,33 @@ fn download_chunk(
         file.write_all(&buffer[..bytes])?;
         chunk_downloaded += bytes as u64;
 
-        // Update shared progress
-        {
-            let mut p = progress.lock().unwrap();
-            p.downloaded += bytes as u64;
+        // Update atomic counter
+        downloaded_atomic.fetch_add(bytes as u64, Ordering::Relaxed);
 
-            // Print progress periodically
-            if p.downloaded % (1024 * 1024 * 10) == 0 {
-                let percent = (p.downloaded * 100 / p.total) as u32;
-                println!("  Overall: {}% ({:.1} MB / {:.1} MB) - {} chunks done",
+        // Check if we should print progress (time-based)
+        {
+            let mut last = last_print.lock().unwrap();
+            if last.elapsed() >= PROGRESS_PRINT_INTERVAL {
+                let total_downloaded = downloaded_atomic.load(Ordering::Relaxed);
+                let percent = (total_downloaded * 100 / total) as u32;
+                println!("  Progress: {}% ({:.1} MB / {:.1} MB)",
                     percent,
-                    p.downloaded as f64 / 1024.0 / 1024.0,
-                    p.total as f64 / 1024.0 / 1024.0,
-                    p.chunks_completed);
+                    total_downloaded as f64 / 1024.0 / 1024.0,
+                    total as f64 / 1024.0 / 1024.0);
+                *last = Instant::now();
             }
         }
     }
 
-    // Mark chunk as completed
-    {
-        let mut p = progress.lock().unwrap();
-        p.chunks_completed += 1;
+    println!("  Chunk {} complete: {:.1} MB", chunk_idx, chunk_downloaded as f64 / 1024.0 / 1024.0);
 
-        if chunk_downloaded != chunk_size {
-            println!("Warning: Chunk {} downloaded {} bytes, expected {}",
-                chunk_idx, chunk_downloaded, chunk_size);
-        }
+    Ok(chunk_path)
+}
+
+impl Default for CustomSdkDownloader {
+    fn default() -> Self {
+        Self::new().expect("Failed to create default CustomSdkDownloader")
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
