@@ -1,6 +1,6 @@
 # Android CLI (Rust)
 
-Pure Rust implementation of [Google's Android CLI](https://developer.android.com/tools) development tools.
+Pure Rust implementation of [Google's Android CLI](https://developer.android.com/tools/agents/android-cli) development tools.
 
 This is a reimplementation of the official `android` command-line tool distributed by Google, providing the same functionality with the performance and safety benefits of Rust.
 
