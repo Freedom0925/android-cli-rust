@@ -3,6 +3,7 @@ use anyhow::{Result, Context, anyhow};
 use crate::http::Downloader;
 use crate::sdk::{Sdk, SdkEntry, Revision, Storage, Repository, Channel};
 use crate::sdk::diff::SdkDiff;
+use crate::sdk::arm_sdk::{CustomSdkDownloader, CustomArch};
 
 /// SDK Manager - orchestrates SDK package management
 pub struct SdkManager {
@@ -11,6 +12,15 @@ pub struct SdkManager {
     downloader: Downloader,
     sdk_path: PathBuf,
     base_url: String,
+}
+
+/// Check if current platform needs GitHub releases fallback
+fn needs_arm_fallback() -> bool {
+    let platform = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+
+    // Linux ARM (aarch64) needs fallback
+    platform == "linux" && arch == "aarch64"
 }
 
 impl SdkManager {
@@ -27,7 +37,16 @@ impl SdkManager {
         let downloader = Downloader::new()
             .context("Failed to create downloader")?;
 
-        // Fetch repository index
+        // Check if we need to use ARM fallback
+        if needs_arm_fallback() {
+            println!("Detected Linux ARM platform");
+            println!("Official Google SDK doesn't support this architecture");
+            println!("Will use GitHub releases as fallback:");
+            println!("  https://github.com/HomuHomu833/android-sdk-custom");
+            println!();
+        }
+
+        // Fetch repository index (may be empty/unsupported for ARM)
         let repository = Repository::fetch(index_url, &downloader)
             .context("Failed to fetch repository index")?;
 
@@ -160,11 +179,25 @@ impl SdkManager {
 
     /// Install packages
     pub fn install(&self, packages: &[String], channel: Channel, force: bool) -> Result<()> {
+        // Check if we should use ARM fallback
+        if needs_arm_fallback() {
+            return self.install_from_github_releases(packages, force);
+        }
+
+        // Normal install flow
         // Parse package specifications
         let request = self.parse_request(packages)?;
 
         // Resolve dependencies
         let resolved = self.repository.resolve(&request, channel, &self.base_url);
+
+        // Check if any packages couldn't be resolved (architecture not supported)
+        if resolved.entries.is_empty() {
+            println!("No packages found for current architecture in official repository");
+            println!("Attempting to download from GitHub releases...");
+
+            return self.install_from_github_releases(packages, force);
+        }
 
         // Download and install each package
         for entry in &resolved.entries {
@@ -181,6 +214,59 @@ impl SdkManager {
 
         // Garbage collect
         self.storage.gc()?;
+
+        Ok(())
+    }
+
+    /// Install from GitHub releases (fallback for unsupported architectures)
+    fn install_from_github_releases(&self, packages: &[String], force: bool) -> Result<()> {
+        use crate::sdk::arm_sdk::CustomSdkDownloader;
+
+        // GitHub releases provides entire SDK, not individual packages
+        // So we download the latest version
+
+        println!("Downloading Android SDK from GitHub releases...");
+        println!("Source: https://github.com/HomuHomu833/android-sdk-custom");
+        println!();
+
+        let downloader = CustomSdkDownloader::new()?;
+
+        // Parse requested packages to infer version (if specified)
+        let version = packages.iter()
+            .find_map(|p| {
+                let parts: Vec<&str> = p.split(';').collect();
+                if parts.len() > 1 {
+                    Some(parts[1].to_string())
+                } else {
+                    None
+                }
+            });
+
+        // Get current architecture
+        let arch = CustomArch::current()
+            .ok_or_else(|| anyhow!("Could not detect architecture for GitHub download"))?;
+
+        println!("Target architecture: {}", arch);
+        println!("SDK path: {}", self.sdk_path.display());
+        println!();
+
+        // Check if SDK already exists
+        if !force && self.sdk_path.exists() {
+            // Check for some basic SDK directories
+            if self.sdk_path.join("platform-tools").exists() {
+                println!("SDK already installed at {}", self.sdk_path.display());
+                println!("Use --force to reinstall");
+                return Ok(());
+            }
+        }
+
+        // Download and extract
+        downloader.install(version.as_deref(), Some(arch), &self.sdk_path)?;
+
+        println!();
+        println!("SDK installed successfully!");
+        println!("Note: This is a complete SDK bundle from GitHub releases");
+        println!("      It includes platform-tools, build-tools, and other components");
 
         Ok(())
     }

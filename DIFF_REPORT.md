@@ -205,32 +205,34 @@ Finished `release` profile [optimized] target(s)
 
 ---
 
-## 新增功能: ARM/musl SDK 支持
+## 新增功能: ARM/musl SDK 自动支持
 
-Google 官方 Android SDK 仅支持 Linux x86_64。Rust 版本扩展了对 ARM 及其他架构的支持：
+Google 官方 Android SDK 仅支持 Linux x86_64。Rust 版本**自动检测** Linux ARM 平台并从 GitHub releases 下载：
 
 **来源**: [HomuHomu833/android-sdk-custom](https://github.com/HomuHomu833/android-sdk-custom)
 
-**命令**: `android sdk arm`
+**自动检测逻辑**:
+- 运行 `android sdk install` 时自动检测平台
+- Linux aarch64 自动使用 GitHub releases
+- 官方仓库找不到对应架构时自动 fallback
+
+**使用方式** (无需额外命令):
+```bash
+# 在 Linux ARM 上，标准命令自动使用 GitHub releases
+android sdk install build-tools;36    # 自动从 GitHub 下载
+android sdk install platform-tools     # 并行下载加速
+```
+
+**并行下载**: 自动启用多线程并行下载，显著加快大文件下载速度。
 
 **支持架构**:
-- aarch64 (ARM64)
+- aarch64 (ARM64) - 自动检测 Linux ARM
 - x86_64, x86
 - armhf, arm
 - riscv64, riscv32
 - loongarch64
 - powerpc64le
 - s390x
-
-**使用方式**:
-```bash
-android sdk arm --list                # 列出可用版本
-android sdk arm                       # 自动检测架构下载最新版
-android sdk arm --version 36.0.2 --arch aarch64  # 指定版本和架构
-android sdk arm --threads 8           # 8线程并行下载加速
-```
-
-**并行下载**: 支持多线程并行下载，通过 HTTP Range 请求分块下载，显著加快大文件下载速度。默认4线程。
 
 ---
 

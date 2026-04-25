@@ -35,6 +35,8 @@ android sdk install "build-tools;34.0.0" "platforms;34" "platform-tools"
 # List available packages
 android sdk list --all
 
+# On Linux ARM, automatically uses GitHub releases with parallel download
+
 # Create and start emulator
 android emulator create --profile pixel_6
 android emulator start pixel_6_api34
@@ -53,10 +55,6 @@ android create AndroidCompose --name "My App" --minSdk 24
 
 # Search documentation
 android docs search "RecyclerView"
-
-# Download ARM/musl SDK for Linux ARM
-android sdk arm --list
-android sdk arm --version 36.0.2 --arch aarch64 --threads 8
 ```
 
 ## Commands
@@ -102,21 +100,21 @@ android skills remove --skill android-cli --agent cursor
 
 ## ARM/Musl SDK Support (Linux)
 
-The official Google Android SDK only supports x86_64 on Linux. This CLI extends support for ARM and other architectures via [android-sdk-custom](https://github.com/HomuHomu833/android-sdk-custom):
+The official Google Android SDK only supports x86_64 on Linux. This CLI automatically detects Linux ARM platforms and downloads from [android-sdk-custom](https://github.com/HomuHomu833/android-sdk-custom) instead:
 
 ```bash
-# List available ARM SDK versions
-android sdk arm --list
-
-# Download SDK for current architecture (auto-detect)
-android sdk arm
-
-# Download specific version and architecture
-android sdk arm --version 36.0.2 --arch aarch64
+# On Linux ARM, standard commands automatically use GitHub releases
+android sdk install build-tools;36  # Auto-detects ARM, downloads from GitHub
+android sdk install platform-tools   # Parallel download enabled
 ```
 
-**Supported architectures:**
-- `aarch64` (ARM64)
+**Automatic detection**: When running on Linux aarch64, the CLI automatically:
+- Uses GitHub releases as download source
+- Enables parallel multi-threaded download
+- Falls back to GitHub if official repo doesn't support your architecture
+
+**Supported architectures** (via GitHub fallback):
+- `aarch64` (ARM64) - auto-detected on Linux ARM
 - `x86_64`, `x86`
 - `armhf`, `arm`
 - `riscv64`, `riscv32`

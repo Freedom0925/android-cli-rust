@@ -273,27 +273,6 @@ enum SdkCommands {
     /// Check SDK status
     #[command(hide = true)]
     Status,
-    /// Download Android SDK from GitHub releases (for ARM/musl builds)
-    /// Source: https://github.com/HomuHomu833/android-sdk-custom
-    #[command(name = "arm")]
-    Arm {
-        /// SDK version to download (e.g., "36.0.2", "35.0.2"). Default: latest
-        #[arg(long)]
-        version: Option<String>,
-
-        /// Target architecture. Default: auto-detect
-        /// Options: aarch64, x86_64, x86, armhf, arm, riscv64, loongarch64, powerpc64le, s390x
-        #[arg(long)]
-        arch: Option<String>,
-
-        /// List available versions and architectures
-        #[arg(long)]
-        list: bool,
-
-        /// Number of parallel download threads. Default: 4
-        #[arg(long, default_value = "4")]
-        threads: usize,
-    },
 
     // Hidden/internal commands for advanced operations
     /// Fetch SDK index from repository
@@ -721,10 +700,6 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
         SdkCommands::Status => {
             manager.status(Channel::Stable)?;
         }
-        // ARM/custom SDK download from GitHub releases
-        SdkCommands::Arm { version, arch, list, threads } => {
-            execute_sdk_arm(version.as_deref(), arch.as_deref(), list, threads, &ctx)?;
-        }
         // Hidden commands
         SdkCommands::Fetch { check } => {
             manager.fetch(check)?;
@@ -776,56 +751,6 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
         }
     }
     Ok(())
-}
-
-// ARM/custom SDK download command
-fn execute_sdk_arm(version: Option<&str>, arch: Option<&str>, list: bool, threads: usize, ctx: &Context) -> Result<()> {
-    use android_cli::sdk::{CustomSdkDownloader, CustomArch};
-
-    let downloader = CustomSdkDownloader::with_threads(threads)?;
-
-    if list {
-        // List available versions
-        downloader.list_versions()?;
-        return Ok(());
-    }
-
-    // Parse architecture if provided
-    let custom_arch = if let Some(arch_str) = arch {
-        Some(parse_custom_arch(arch_str)?)
-    } else {
-        CustomArch::current()
-    };
-
-    // Install SDK
-    downloader.install(version, custom_arch, &ctx.sdk_path)?;
-
-    Ok(())
-}
-
-/// Parse architecture string to CustomArch
-fn parse_custom_arch(s: &str) -> Result<android_cli::sdk::CustomArch> {
-    use android_cli::sdk::CustomArch;
-
-    match s.to_lowercase().as_str() {
-        "aarch64" | "arm64" => Ok(CustomArch::Aarch64),
-        "aarch64_be" => Ok(CustomArch::Aarch64Be),
-        "armhf" | "arm" => Ok(CustomArch::Armhf),
-        "arm-linux-musleabi" => Ok(CustomArch::Arm),
-        "armeb" => Ok(CustomArch::Armeb),
-        "armebhf" => Ok(CustomArch::ArmebHf),
-        "x86" | "i686" => Ok(CustomArch::X86),
-        "x86_64" | "amd64" => Ok(CustomArch::X86_64),
-        "riscv32" => Ok(CustomArch::Riscv32),
-        "riscv64" => Ok(CustomArch::Riscv64),
-        "loongarch64" => Ok(CustomArch::Loongarch64),
-        "powerpc64le" | "ppc64le" => Ok(CustomArch::Powerpc64le),
-        "s390x" => Ok(CustomArch::S390x),
-        _ => Err(anyhow::anyhow!(
-            "Unknown architecture: {}. Valid options: aarch64, x86_64, x86, armhf, arm, riscv64, loongarch64, powerpc64le, s390x",
-            s
-        )),
-    }
 }
 
 // Emulator commands
@@ -1441,9 +1366,9 @@ fn print_command_help(cmd_name: &str) {
             println!("  list [--all] [--all-versions] [--canary] [--beta]  List packages");
             println!("  update [package] [--canary] [--beta] [--force]    Update packages");
             println!("  remove <package>                                  Remove a package");
-            println!("  arm [--version <v>] [--arch <arch>] [--threads <n>] [--list]  Download ARM/musl SDK");
-            println!("                                                    Parallel download with N threads (default: 4)");
-            println!("                                                    (https://github.com/HomuHomu833/android-sdk-custom)");
+            println!();
+            println!("Note: On Linux ARM (aarch64), packages are automatically downloaded from");
+            println!("      https://github.com/HomuHomu833/android-sdk-custom");
         }
         "emulator" => {
             println!("Emulator management");
