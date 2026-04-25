@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package android.sdk;
+
+import "sdk.proto";
+
+message SdkEntry {
+  string path = 1;
+  Revision revision = 2;
+  string url = 3;
+  int64 size = 4;
+  string sha1 = 5;
+}
+
+message Sdk {
+  repeated SdkEntry entries = 1;
+}
+
+message Object {
+  oneof obj {
+    Sdk sdk = 2;
+    PackageList packages = 3;
+  }
+}

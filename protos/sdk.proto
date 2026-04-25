@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package android.sdk;
+
+enum Channel {
+  CHANNEL_UNSPECIFIED = 0;
+  CHANNEL_CANARY = 1;
+  CHANNEL_BETA = 2;
+  CHANNEL_STABLE = 3;
+}
+
+enum Platform {
+  PLATFORM_UNSPECIFIED = 0;
+  PLATFORM_LINUX = 1;
+  PLATFORM_MAC = 2;
+  PLATFORM_WINDOWS = 3;
+}
+
+enum Architecture {
+  ARCHITECTURE_UNSPECIFIED = 0;
+  ARCHITECTURE_X86 = 1;
+  ARCHITECTURE_X64 = 2;
+  ARCHITECTURE_AARCH64 = 3;
+}
+
+message Revision {
+  int32 major = 1;
+  int32 minor = 2;
+  int32 micro = 3;
+  int32 preview = 4;
+}
+
+message Dependency {
+  string path = 1;
+  Revision min_revision = 2;
+}
+
+message Artifact {
+  int64 size = 1;
+  string checksum = 2;
+  string url = 3;
+}
+
+message Archive {
+  Artifact artifact = 1;
+  Platform host_os = 2;
+  Architecture host_arch = 3;
+}
+
+message Attribute {
+  string key = 1;
+  string value = 2;
+}
+
+message Package {
+  bool obsolete = 1;
+  string path = 2;
+  Revision revision = 3;
+  string display_name = 4;
+  string license_name = 5;
+  repeated Dependency dependencies = 6;
+  Channel channel = 7;
+  repeated Archive archives = 8;
+  repeated Attribute attributes = 9;
+}
+
+message License {
+  string name = 1;
+  string contents = 2;
+}
+
+message PackageList {
+  repeated Package packages = 1;
+  repeated License licenses = 2;
+}
