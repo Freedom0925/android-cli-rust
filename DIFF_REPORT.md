@@ -201,6 +201,33 @@ Finished `release` profile [optimized] target(s)
 |------|------|------|
 | metrics | src/metrics/mod.rs | Metrics统计上报 |
 | skills/location | src/skills/location.rs | SkillsInstallLocation enum (42个Agent) |
+| sdk/arm_sdk | src/sdk/arm_sdk.rs | ARM/musl SDK下载 (支持Linux ARM架构) |
+
+---
+
+## 新增功能: ARM/musl SDK 支持
+
+Google 官方 Android SDK 仅支持 Linux x86_64。Rust 版本扩展了对 ARM 及其他架构的支持：
+
+**来源**: [HomuHomu833/android-sdk-custom](https://github.com/HomuHomu833/android-sdk-custom)
+
+**命令**: `android sdk arm`
+
+**支持架构**:
+- aarch64 (ARM64)
+- x86_64, x86
+- armhf, arm
+- riscv64, riscv32
+- loongarch64
+- powerpc64le
+- s390x
+
+**使用方式**:
+```bash
+android sdk arm --list                # 列出可用版本
+android sdk arm                       # 自动检测架构下载最新版
+android sdk arm --version 36.0.2 --arch aarch64  # 指定版本和架构
+```
 
 ---
 

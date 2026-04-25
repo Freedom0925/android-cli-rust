@@ -53,6 +53,10 @@ android create AndroidCompose --name "My App" --minSdk 24
 
 # Search documentation
 android docs search "RecyclerView"
+
+# Download ARM/musl SDK for Linux ARM
+android sdk arm --list
+android sdk arm --version 36.0.2 --arch aarch64
 ```
 
 ## Commands
@@ -95,6 +99,30 @@ android skills add --skill android-cli --agent claude-code,cursor
 # Remove skill
 android skills remove --skill android-cli --agent cursor
 ```
+
+## ARM/Musl SDK Support (Linux)
+
+The official Google Android SDK only supports x86_64 on Linux. This CLI extends support for ARM and other architectures via [android-sdk-custom](https://github.com/HomuHomu833/android-sdk-custom):
+
+```bash
+# List available ARM SDK versions
+android sdk arm --list
+
+# Download SDK for current architecture (auto-detect)
+android sdk arm
+
+# Download specific version and architecture
+android sdk arm --version 36.0.2 --arch aarch64
+```
+
+**Supported architectures:**
+- `aarch64` (ARM64)
+- `x86_64`, `x86`
+- `armhf`, `arm`
+- `riscv64`, `riscv32`
+- `loongarch64`
+- `powerpc64le`
+- `s390x`
 
 ## Architecture
 
