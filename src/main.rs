@@ -289,6 +289,10 @@ enum SdkCommands {
         /// List available versions and architectures
         #[arg(long)]
         list: bool,
+
+        /// Number of parallel download threads. Default: 4
+        #[arg(long, default_value = "4")]
+        threads: usize,
     },
 
     // Hidden/internal commands for advanced operations
@@ -718,8 +722,8 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
             manager.status(Channel::Stable)?;
         }
         // ARM/custom SDK download from GitHub releases
-        SdkCommands::Arm { version, arch, list } => {
-            execute_sdk_arm(version.as_deref(), arch.as_deref(), list, &ctx)?;
+        SdkCommands::Arm { version, arch, list, threads } => {
+            execute_sdk_arm(version.as_deref(), arch.as_deref(), list, threads, &ctx)?;
         }
         // Hidden commands
         SdkCommands::Fetch { check } => {
@@ -775,10 +779,10 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
 }
 
 // ARM/custom SDK download command
-fn execute_sdk_arm(version: Option<&str>, arch: Option<&str>, list: bool, ctx: &Context) -> Result<()> {
+fn execute_sdk_arm(version: Option<&str>, arch: Option<&str>, list: bool, threads: usize, ctx: &Context) -> Result<()> {
     use android_cli::sdk::{CustomSdkDownloader, CustomArch};
 
-    let downloader = CustomSdkDownloader::new()?;
+    let downloader = CustomSdkDownloader::with_threads(threads)?;
 
     if list {
         // List available versions
@@ -1437,7 +1441,8 @@ fn print_command_help(cmd_name: &str) {
             println!("  list [--all] [--all-versions] [--canary] [--beta]  List packages");
             println!("  update [package] [--canary] [--beta] [--force]    Update packages");
             println!("  remove <package>                                  Remove a package");
-            println!("  arm [--version <v>] [--arch <arch>] [--list]      Download ARM/musl SDK from GitHub");
+            println!("  arm [--version <v>] [--arch <arch>] [--threads <n>] [--list]  Download ARM/musl SDK");
+            println!("                                                    Parallel download with N threads (default: 4)");
             println!("                                                    (https://github.com/HomuHomu833/android-sdk-custom)");
         }
         "emulator" => {

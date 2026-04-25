@@ -56,7 +56,7 @@ android docs search "RecyclerView"
 
 # Download ARM/musl SDK for Linux ARM
 android sdk arm --list
-android sdk arm --version 36.0.2 --arch aarch64
+android sdk arm --version 36.0.2 --arch aarch64 --threads 8
 ```
 
 ## Commands
