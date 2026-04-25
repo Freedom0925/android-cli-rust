@@ -1251,7 +1251,7 @@ fn execute_create(
 ) -> Result<()> {
     let _ = ctx; // unused
 
-    let runner = TemplateEngineRunner::new();
+    let mut runner = TemplateEngineRunner::new();
 
     if list {
         runner.print_templates()?;
