@@ -54,6 +54,11 @@ This is a pure Rust implementation of Android CLI tools, originally implemented 
 - InvocationRecord and CrashRecord tracking
 - Writes to local JSON files in `.android/cli/metrics/` (no network upload)
 
+**ARM SDK Fallback (`src/sdk/arm_sdk.rs`, `src/sdk/manager.rs`):**
+- Automatic detection: Linux aarch64 triggers GitHub releases download
+- Parallel multi-threaded download via HTTP Range requests
+- Fallback to GitHub if official repo lacks architecture support
+
 ### Key Data Flows
 
 1. **SDK Install Flow:** `manager.install()` → `repository.fetch_index()` (protobuf) → `storage.write_object()` → `download_archive()` → unzip to SDK path
