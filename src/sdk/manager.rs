@@ -232,15 +232,29 @@ impl SdkManager {
         let downloader = CustomSdkDownloader::new()?;
 
         // Parse requested packages to infer version (if specified)
-        let version = packages.iter()
-            .find_map(|p| {
+        // Take the first package's version, warn if multiple different versions
+        let versions: Vec<String> = packages.iter()
+            .filter_map(|p| {
                 let parts: Vec<&str> = p.split(';').collect();
                 if parts.len() > 1 {
                     Some(parts[1].to_string())
                 } else {
                     None
                 }
-            });
+            })
+            .collect();
+
+        let version = versions.first().cloned();
+
+        // Warn if multiple different versions specified
+        if versions.len() > 1 {
+            let unique_versions: Vec<&String> = versions.iter().collect::<std::collections::HashSet<_>>()
+                .into_iter().collect();
+            if unique_versions.len() > 1 {
+                println!("Warning: Multiple versions specified in packages: {}", versions.join(", "));
+                println!("Using first version: {}", version.as_ref().unwrap());
+            }
+        }
 
         // Get current architecture
         let arch = CustomArch::current()
