@@ -49,7 +49,7 @@ jobs:
             ext: tar.gz
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
