@@ -70,7 +70,7 @@ image = "0.25"
 imageproc = "0.26"
 
 # Full-text search engine (Lucene equivalent)
-tantivy = "0.22"
+tantivy = "0.26"
 
 # LRU cache for search results
 lru = "0.12"
