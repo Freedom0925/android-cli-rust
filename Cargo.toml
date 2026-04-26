@@ -28,7 +28,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 walkdir = "2"
 
 # Progress bars
-indicatif = "0.17"
+indicatif = "0.18"
 
 # Temporary files
 tempfile = "3"
