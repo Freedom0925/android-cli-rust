@@ -1,4 +1,4 @@
-name: Build
+name: Release
 
 on:
   push:
@@ -6,14 +6,13 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
-      release:
-        description: 'Create release after build'
-        required: false
-        default: 'false'
-        type: boolean
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+        type: string
 
-env:
-  CARGO_TERM_COLOR: always
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -26,27 +25,22 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: android-macos-arm64
-            ext: tar.gz
 
           - target: x86_64-apple-darwin
             os: macos-latest
             artifact: android-macos-x64
-            ext: tar.gz
 
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: android-windows-x64
-            ext: zip
 
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: android-linux-x64
-            ext: tar.gz
 
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: android-linux-arm64
-            ext: tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -82,15 +76,6 @@ jobs:
           linker = "aarch64-linux-gnu-gcc"
           EOF
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -99,15 +84,17 @@ jobs:
         run: |
           cd target/${{ matrix.target }}/release
           strip android || true
-          tar -czvf ${{ matrix.artifact }}.tar.gz android
-          mv ${{ matrix.artifact }}.tar.gz $GITHUB_WORKSPACE
+          VERSION="${GITHUB_REF_NAME}"
+          tar -czvf android-${VERSION}-${{ matrix.artifact }}.tar.gz android
+          mv android-${VERSION}-${{ matrix.artifact }}.tar.gz $GITHUB_WORKSPACE
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ${{ matrix.artifact }}.zip android.exe
-          mv ${{ matrix.artifact }}.zip $env:GITHUB_WORKSPACE
+          VERSION="${GITHUB_REF_NAME}"
+          7z a android-${VERSION}-${{ matrix.artifact }}.zip android.exe
+          mv android-${VERSION}-${{ matrix.artifact }}.zip $env:GITHUB_WORKSPACE
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -116,5 +103,46 @@ jobs:
           path: |
             *.tar.gz
             *.zip
-          if-no-files-found: error
-          retention-days: 30
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --lib
+
+  release:
+    name: Create Release
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: android-*
+          merge-multiple: false
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
