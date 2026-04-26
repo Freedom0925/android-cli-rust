@@ -5,7 +5,7 @@ use android_cli::config::{DEFAULT_SDK_INDEX_URL, DEFAULT_SDK_URL};
 /// Android CLI - Pure Rust implementation
 #[derive(Parser)]
 #[command(name = "android")]
-#[command(version = "0.1.0")]
+#[command(version = "0.1.1")]
 #[command(about = "Android development tools CLI")]
 #[command(
     long_about = "Android CLI provides tools for SDK management, emulator control, device interaction, and more."

@@ -1,6 +1,6 @@
 [package]
 name = "android-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Android CLI Rust Implementation"]
 description = "Pure Rust implementation of Android CLI tools"
