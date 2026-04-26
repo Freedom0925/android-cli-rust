@@ -73,7 +73,7 @@ imageproc = "0.26"
 tantivy = "0.26"
 
 # LRU cache for search results
-lru = "0.12"
+lru = "0.17"
 
 # Character encoding detection
 encoding_rs = "0.8"
