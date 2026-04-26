@@ -1262,9 +1262,8 @@ fn execute_create(
         "The name of the application is required (e.g. 'My Application')"
     ))?;
 
-    let template_name = template.ok_or_else(|| anyhow::anyhow!(
-        "Template name required. Use: android create <template> --name <project-name>"
-    ))?;
+    // Default template is empty-activity
+    let template_name = template.unwrap_or("empty-activity");
 
     let output_path = PathBuf::from(output);
     runner.create_project(template_name, name, &output_path, min_sdk, verbose)?;
