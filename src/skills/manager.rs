@@ -5,14 +5,11 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
+use crate::config::skills::SKILLS_DOWNLOAD_URL;
 use crate::skills::location::SkillsInstallLocation;
 
 /// CLI version for bundled skills versioning
 const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// GitHub releases URL for downloading latest skills
-const SKILLS_DOWNLOAD_URL: &str =
-    "https://github.com/android/skills/releases/latest/download/android-skills.zip";
 
 /// Skill metadata from SKILL.md YAML frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize)]

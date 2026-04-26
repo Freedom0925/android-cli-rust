@@ -7,19 +7,14 @@
 
 use anyhow::{anyhow, Context, Result};
 use std::fs;
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// GitHub repository for custom Android SDK builds
-const GITHUB_REPO: &str = "HomuHomu833/android-sdk-custom";
-const GITHUB_API_URL: &str = "https://api.github.com/repos/HomuHomu833/android-sdk-custom/releases";
-
-/// Custom SDK download URL pattern
-const DOWNLOAD_URL_PATTERN: &str = "https://github.com/HomuHomu833/android-sdk-custom/releases/download/{version}/android-sdk-{arch}-linux-musl.tar.xz";
+use crate::config::arm_sdk::{GITHUB_API_URL, GITHUB_REPO, DOWNLOAD_URL_PATTERN};
 
 /// Default number of parallel download threads
 const DEFAULT_THREADS: usize = 4;

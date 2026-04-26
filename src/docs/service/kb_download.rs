@@ -5,14 +5,13 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
+use crate::config::docs::KB_ZIP_URL;
 use super::kb_doc::KbDownloadResult;
 
 /// Knowledge base constants - matches Google's KnowledgeBaseConstants.kt
 pub struct KnowledgeBaseConstants;
 
 impl KnowledgeBaseConstants {
-    /// KB ZIP download URL (from https://dl.google.com/dac/dac_kb.zip)
-    pub const KB_ZIP_URL: &str = "https://dl.google.com/dac/dac_kb.zip";
     /// Ready file timeout in milliseconds
     pub const READY_FILE_TIMEOUT_MS: u64 = 30000;
     /// Ready file poll interval in milliseconds
@@ -179,7 +178,7 @@ impl KBDownloadService {
     fn check_for_update(&self) -> Result<()> {
         let response = self
             .client
-            .head(KnowledgeBaseConstants::KB_ZIP_URL)
+            .head(KB_ZIP_URL)
             .send()
             .context("Failed to check for KB updates")?;
 
@@ -237,7 +236,7 @@ impl KBDownloadService {
         // Get ETag via HEAD request
         let head_response = self
             .client
-            .head(KnowledgeBaseConstants::KB_ZIP_URL)
+            .head(KB_ZIP_URL)
             .send()
             .context("Failed to get KB metadata")?;
 
@@ -250,7 +249,7 @@ impl KBDownloadService {
         // Download with progress
         let response = self
             .client
-            .get(KnowledgeBaseConstants::KB_ZIP_URL)
+            .get(KB_ZIP_URL)
             .send()
             .context("Failed to start KB download")?;
 
@@ -531,7 +530,7 @@ mod tests {
 
     #[test]
     fn test_constants() {
-        assert!(KnowledgeBaseConstants::KB_ZIP_URL.starts_with("https://dl.google.com/dac/"));
+        assert!(KB_ZIP_URL.starts_with("https://dl.google.com/dac/"));
         assert!(!KnowledgeBaseConstants::URL_FIELD.is_empty());
         assert_eq!(KnowledgeBaseConstants::MAX_RESULTS_SEARCH, 10);
         assert_eq!(KnowledgeBaseConstants::TITLE_BOOST, 10.0);
