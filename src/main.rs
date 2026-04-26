@@ -132,9 +132,9 @@ enum Commands {
     },
     /// Create new Android project from template
     Create {
-        /// The name of the application (e.g. 'My Application') - REQUIRED
-        #[arg(long)]
-        name: String,
+        /// The name of the application (e.g. 'My Application') - REQUIRED unless --list
+        #[arg(long, required_unless_present = "list")]
+        name: Option<String>,
         /// The destination project directory path (default is '.')
         #[arg(long, short = 'o', default_value = ".")]
         output: String,
@@ -581,7 +581,7 @@ fn main() -> Result<()> {
         Commands::Docs { command } => execute_docs(command),
         Commands::Update { url } => execute_update(url.as_deref()),
         Commands::Info { field } => execute_info(field.as_deref(), &ctx),
-        Commands::Create { name, output, min_sdk, list, template, verbose, dry_run: _ } => execute_create(&name, &output, min_sdk.as_deref(), list, template.as_deref(), verbose, &ctx),
+        Commands::Create { name, output, min_sdk, list, template, verbose, dry_run: _ } => execute_create(name.as_deref(), &output, min_sdk.as_deref(), list, template.as_deref(), verbose, &ctx),
         Commands::Screen { command } => execute_screen(command, &ctx),
         Commands::Layout { output, diff, pretty, device } => execute_layout(output.as_deref(), diff, pretty, device.as_deref(), &ctx),
         Commands::Help { command } => execute_help(command.as_deref()),
@@ -1241,7 +1241,7 @@ fn execute_info(field: Option<&str>, ctx: &Context) -> Result<()> {
 
 // Create command
 fn execute_create(
-    name: &str,
+    name: Option<&str>,
     output: &str,
     min_sdk: Option<&str>,
     list: bool,
@@ -1257,6 +1257,10 @@ fn execute_create(
         runner.print_templates()?;
         return Ok(());
     }
+
+    let name = name.ok_or_else(|| anyhow::anyhow!(
+        "The name of the application is required (e.g. 'My Application')"
+    ))?;
 
     let template_name = template.ok_or_else(|| anyhow::anyhow!(
         "Template name required. Use: android create <template> --name <project-name>"
