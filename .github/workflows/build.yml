@@ -49,6 +49,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config libssl-dev
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -57,15 +63,14 @@ jobs:
       - name: Install cross-compilation tools (Linux ARM)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Configure cross-compilation (Linux ARM)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
+          mkdir -p ~/.cargo
           echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
           echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
-          echo 'ar = "aarch64-linux-gnu-ar"' >> ~/.cargo/config.toml
 
       - name: Cache cargo dependencies
         uses: actions/cache@v4

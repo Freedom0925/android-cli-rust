@@ -319,7 +319,8 @@ impl SkillManager {
                 let mut file = archive.by_index(i)?;
                 let outpath = match file.enclosed_name() {
                     Some(path) => {
-                        let full_path = skills_dir.join(path);
+                        let path_str = path.display().to_string();
+                        let full_path = skills_dir.join(&path);
                         // Security: Verify path doesn't escape target directory (path traversal protection)
                         let canonical_skills_dir = skills_dir.canonicalize()
                             .unwrap_or_else(|_| skills_dir.clone());
@@ -327,7 +328,7 @@ impl SkillManager {
                         if !full_path.starts_with(&canonical_skills_dir) &&
                             !full_path.to_str().map(|s| s.starts_with(skills_dir.to_str().unwrap_or(""))).unwrap_or(false) {
                             // Skip potentially malicious path traversal attempts
-                            println!("Skipping suspicious path: {}", path.display());
+                            println!("Skipping suspicious path: {}", path_str);
                             continue;
                         }
                         full_path

@@ -22,7 +22,7 @@ sha1 = "0.10"
 sha2 = "0.10"
 
 # ZIP handling
-zip = "0.6"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # Directory traversal
 walkdir = "2"
