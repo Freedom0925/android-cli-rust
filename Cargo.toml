@@ -67,7 +67,7 @@ urlencoding = "2"
 
 # Image processing (for vision module)
 image = "0.25"
-imageproc = "0.25"
+imageproc = "0.26"
 
 # Full-text search engine (Lucene equivalent)
 tantivy = "0.22"
