@@ -66,7 +66,8 @@ impl Storage {
         let mut hasher = Sha1::new();
         hasher.update(data);
         let result = hasher.finalize();
-        format!("{:x}", result)
+        // Convert to hex string manually for sha1 0.11 compatibility
+        result.iter().map(|b| format!("{:02x}", b)).collect()
     }
 
     /// Save an SDK index and return its SHA
