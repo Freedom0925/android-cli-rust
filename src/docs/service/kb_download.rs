@@ -320,7 +320,8 @@ impl KBDownloadService {
             hasher.update(&buffer[..n]);
         }
 
-        Ok(format!("{:x}", hasher.finalize()))
+        let result = hasher.finalize();
+        Ok(result.iter().map(|b| format!("{:02x}", b)).collect())
     }
 
     /// Create ready file (index_ready.json) to signal index completion
