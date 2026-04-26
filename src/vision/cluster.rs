@@ -399,7 +399,7 @@ impl ClusterDetector {
 
             // Find all clusters adjacent to this one
             let mut merged_pixels: HashSet<Point> = clusters[i].pixels.clone();
-            let mut merged_color = clusters[i].color;
+            let merged_color = clusters[i].color;
 
             for j in (i + 1)..clusters.len() {
                 if visited.contains(&j) {
@@ -529,10 +529,9 @@ mod tests {
         let img = DynamicImage::new_rgba8(5, 5);
         let detector = ClusterDetector::new(30, 10, 10000);
 
-        let clusters = detector.detect_clusters(&img);
+        let _clusters = detector.detect_clusters(&img);
         // Small image, all pixels in one bucket but should be below min_cluster_size if threshold is high
         // With 5x5 = 25 pixels and min_cluster_size = 10, we should get clusters
-        assert!(clusters.len() >= 0);
     }
 
     #[test]

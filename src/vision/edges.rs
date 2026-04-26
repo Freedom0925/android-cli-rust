@@ -1,4 +1,3 @@
-use anyhow::Result;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 
 /// Sobel edge detection with automatic or manual threshold
@@ -118,7 +117,7 @@ impl SobelEdges {
 ///
 /// Otsu's method maximizes the between-class variance to find
 /// the optimal threshold for separating foreground (edges) from background
-fn find_otsu_threshold(histogram: &[u32; 256], total_pixels: u64) -> u8 {
+fn find_otsu_threshold(histogram: &[u32; 256], _total_pixels: u64) -> u8 {
     let mut sum: f64 = 0.0;
     let mut total: u64 = 0;
 

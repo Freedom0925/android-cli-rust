@@ -354,7 +354,7 @@ impl CustomSdkDownloader {
         for chunk_idx in 0..num_chunks {
             let start = chunk_idx as u64 * chunk_size;
             let end = ((chunk_idx as u64 + 1) * chunk_size).min(total_size);
-            let actual_size = end - start;
+            let _actual_size = end - start;
 
             let url = url_arc.clone();
             let client = client_arc.clone();

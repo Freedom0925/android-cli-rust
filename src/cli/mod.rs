@@ -7,5 +7,5 @@ pub mod context;
 pub mod handlers;
 
 pub use commands::*;
-pub use context::{Context, SysInfoService, get_channel_from_flags};
+pub use context::Context;
 pub use handlers::*;

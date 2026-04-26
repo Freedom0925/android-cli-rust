@@ -2,6 +2,7 @@
 // This file bridges the generated types with our model types
 
 // Import generated types with renamed aliases to avoid conflict
+#[allow(dead_code)]
 mod proto_types {
     // Include the generated protobuf types
     // The prost build generates these in OUT_DIR/android.sdk.rs

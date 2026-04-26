@@ -803,7 +803,7 @@ mod tests {
         let manager = SkillManager::new().unwrap();
         // Should work even with empty skills directory
         let skills = manager.list(None, None).unwrap();
-        assert!(skills.is_empty() || skills.len() >= 0);
+        assert!(skills.is_empty() || !skills.is_empty());
     }
 
     #[test]
@@ -818,7 +818,7 @@ mod tests {
 
     #[test]
     fn test_skill_parse_empty_frontmatter() {
-        let content = "---\n---\n# Skill content";
+        let _content = "---\n---\n# Skill content";
         // Would parse but with default/empty values
         // Actual parsing requires file with proper structure
     }
@@ -833,10 +833,10 @@ mod tests {
     #[test]
     fn test_get_existing_locations() {
         let manager = SkillManager::new().unwrap();
-        let locations = manager.get_existing_locations().unwrap();
         // Should always return at least one if .claude or .gemini exists
         // The result depends on user's system state
-        assert!(locations.len() >= 0);
+        let locations = manager.get_existing_locations().unwrap();
+        let _ = locations;
     }
 
     #[test]

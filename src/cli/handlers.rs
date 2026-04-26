@@ -2,7 +2,7 @@
 //!
 //! Contains all execute_* functions for processing CLI commands
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use std::path::PathBuf;
 
 use android_cli::adb::AdbService;
@@ -13,7 +13,7 @@ use android_cli::emulator::AvdManager;
 use android_cli::layout::LayoutCommand;
 use android_cli::screen::{ResolveCommand, ScreenCommand};
 use android_cli::sdk::{Channel, SdkManager};
-use android_cli::sdk::protobuf::{Platform, Architecture};
+use android_cli::sdk::protobuf::Platform;
 use android_cli::skills::SkillManager;
 use android_cli::template::{DeviceTemplates, TemplateProcessor};
 use android_cli::update::Updater;

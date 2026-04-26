@@ -393,7 +393,7 @@ impl LayoutCommand {
 
     fn read_previous_dump(
         &self,
-        device: Option<&str>,
+        _device: Option<&str>,
         device_args: &[String],
     ) -> Result<Option<UiNode>> {
         let mut cmd = Command::new(self.adb_path());

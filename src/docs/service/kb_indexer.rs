@@ -9,7 +9,6 @@ use tantivy::{
     schema::{Schema, TEXT, STORED, Field, Value},
     Index,
     IndexWriter,
-    ReloadPolicy,
 };
 use zip::ZipArchive;
 use std::io::Read;
@@ -474,7 +473,7 @@ mod tests {
 
     #[test]
     fn test_kb_schema_creation() {
-        let (schema, fields) = KbSchema::build_schema();
+        let (schema, _fields) = KbSchema::build_schema();
 
         // Schema should have all fields
         assert!(schema.get_field(KnowledgeBaseConstants::URL_FIELD).is_ok());

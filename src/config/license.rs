@@ -133,7 +133,7 @@ impl LicenseManager {
         let answer = input.trim().to_lowercase();
 
         if answer == "y" || answer == "yes" {
-            for (id, content) in unaccepted {
+            for (id, _content) in unaccepted {
                 self.accept_force(id)?;
             }
             println!("All licenses accepted.");
@@ -151,7 +151,7 @@ impl LicenseManager {
     /// Get license content from repository
     pub fn fetch_license_content(&self, license_name: &str) -> Result<String> {
         // Try to read from known license files
-        let known_licenses = [
+        let _known_licenses = [
             ("android-sdk-license", "Android SDK License"),
             ("android-sdk-preview-license", "Android SDK Preview License"),
             ("intel-android-extra-license", "Intel Android Extra License"),

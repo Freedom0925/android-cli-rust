@@ -10,6 +10,7 @@ use std::time::Duration;
 /// HTTP downloader with ETag caching support
 pub struct Downloader {
     client: Client,
+    #[allow(dead_code)]
     proxy: Option<String>,
 }
 
@@ -201,7 +202,6 @@ impl Default for Downloader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_downloader_create() {

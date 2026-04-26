@@ -41,6 +41,7 @@ impl Context {
 /// System information service
 pub struct SysInfoService {
     pub platform: Platform,
+    #[allow(dead_code)]
     pub arch: Architecture,
     pub user_home: PathBuf,
     pub android_user_home: PathBuf,

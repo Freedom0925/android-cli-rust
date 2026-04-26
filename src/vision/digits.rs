@@ -1,5 +1,5 @@
 use anyhow::Result;
-use image::{DynamicImage, GenericImage, ImageBuffer, Rgba};
+use image::{ImageBuffer, Rgba};
 
 /// Digit patterns for drawing numbers (5x3 bitmap patterns)
 /// Each digit is represented as a 5-row, 3-column pattern
@@ -147,7 +147,7 @@ impl Digits {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{DynamicImage, ImageBuffer};
+    use image::ImageBuffer;
 
     #[test]
     fn test_digit_patterns_exist() {

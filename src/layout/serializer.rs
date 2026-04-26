@@ -2,7 +2,6 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use crate::layout::{Key, UiNode};
-use crate::vision::Rect;
 
 /// Element serializer for JSON output
 ///
@@ -18,6 +17,7 @@ use crate::vision::Rect;
 /// - off-screen flag
 pub struct ElementSerializer {
     /// Whether to recursively serialize children
+    #[allow(dead_code)]
     recursive: bool,
 }
 

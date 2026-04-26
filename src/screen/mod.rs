@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::vision::{
-    find_connected_clusters, group_regions, ImageUtils, MutableRegionGroup, PixelCluster, Rect,
-    Region, SobelEdges,
+    group_regions, ImageUtils, MutableRegionGroup, PixelCluster, Rect,
+    Region,
 };
 use image::{DynamicImage, ImageBuffer, Luma, Rgba};
 use std::io::Write;
@@ -122,6 +122,7 @@ impl Bounds {
 /// Resolve command for coordinate substitution
 pub struct ResolveCommand;
 
+#[allow(dead_code)]
 impl ScreenCommand {
     pub fn new(sdk_path: &PathBuf) -> Result<Self> {
         Ok(Self {
@@ -711,6 +712,7 @@ struct AnnotationData {
     clickable: bool,
 }
 
+#[allow(dead_code)]
 /// Parse UI dump XML to extract elements
 fn parse_ui_dump(xml: &str) -> Result<Vec<UiElement>> {
     use crate::layout::build_tree;
@@ -726,6 +728,7 @@ fn parse_ui_dump(xml: &str) -> Result<Vec<UiElement>> {
     Ok(elements)
 }
 
+#[allow(dead_code)]
 /// Recursively collect interactive elements from UI tree
 fn collect_interactive_elements(
     node: &crate::layout::UiNode,
@@ -762,6 +765,7 @@ fn collect_interactive_elements(
     }
 }
 
+#[allow(dead_code)]
 /// Parse a single node element from XML line
 fn parse_node_element(line: &str, index: i32) -> Result<UiElement> {
     let text = extract_attr(line, "text").unwrap_or_default();
@@ -791,6 +795,7 @@ fn parse_node_element(line: &str, index: i32) -> Result<UiElement> {
     })
 }
 
+#[allow(dead_code)]
 /// Extract attribute value from XML string
 fn extract_attr(line: &str, attr: &str) -> Option<String> {
     let pattern = format!("{}=\"", attr);
@@ -803,6 +808,7 @@ fn extract_attr(line: &str, attr: &str) -> Option<String> {
     None
 }
 
+#[allow(dead_code)]
 /// Parse bounds string like "[0,0][1080,2400]"
 fn parse_bounds(s: &str) -> Result<Bounds> {
     // Format: [left,top][right,bottom] - handle negative coordinates

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -22,6 +22,7 @@ pub struct DocsCLI {
     /// Storage directory for KB data (kbzip)
     storage_dir: PathBuf,
     /// Index directory for Tantivy index
+    #[allow(dead_code)]
     index_dir: PathBuf,
     /// KB download service
     download_service: KBDownloadService,

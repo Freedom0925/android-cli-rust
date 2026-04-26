@@ -59,6 +59,7 @@ pub struct ProjectDescription {
 /// Describe CLI for Android projects
 pub struct DescribeCLI {
     /// Root SDK path for describing packages
+    #[allow(dead_code)]
     sdk_path: Option<PathBuf>,
 }
 

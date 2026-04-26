@@ -3,7 +3,6 @@
 //! Based on Kotlin SkillsInstallLocation enum
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Skills installation location for different AI agents

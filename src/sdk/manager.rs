@@ -1,5 +1,5 @@
 use crate::http::Downloader;
-use crate::sdk::arm_sdk::{CustomArch, CustomSdkDownloader};
+use crate::sdk::arm_sdk::CustomArch;
 use crate::sdk::diff::SdkDiff;
 use crate::sdk::{Channel, Repository, Revision, Sdk, SdkEntry, Storage};
 use anyhow::{anyhow, Context, Result};
@@ -341,7 +341,7 @@ impl SdkManager {
         let url = entry.url.as_ref().context("Package has no download URL")?;
 
         // Download archive
-        let archive_path = self.download_archive(url, &entry.sha1)?;
+        let _archive_path = self.download_archive(url, &entry.sha1)?;
 
         // Unzip archive
         self.storage.unzip(&entry.sha1)?;
@@ -510,7 +510,7 @@ impl SdkManager {
 
     /// Remove packages
     pub fn remove(&self, packages: &[String]) -> Result<()> {
-        let installed = self.scan_local_sdk()?;
+        let _installed = self.scan_local_sdk()?;
 
         for spec in packages {
             let parts: Vec<&str> = spec.split(';').collect();

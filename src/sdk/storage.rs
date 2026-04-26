@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use sha1::{Digest, Sha1};
 use std::fs;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 use walkdir::WalkDir;

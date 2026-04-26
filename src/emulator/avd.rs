@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Default device profile for emulator creation
+#[allow(dead_code)]
 pub const DEFAULT_DEVICE_PROFILE: &str = "medium_phone";
 
 /// Validate AVD name to prevent command injection
@@ -306,10 +307,9 @@ mod tests {
     fn test_avd_manager_new() {
         let temp_sdk = tempdir().unwrap();
         let manager = AvdManager::new(temp_sdk.path().to_path_buf()).unwrap();
-        // List should work - may not be empty if user has AVDs in ~/.android/avd
+        // Just verify the operation works - may not be empty if user has AVDs in ~/.android/avd
         let list = manager.list().unwrap();
-        // Just verify the operation works, don't assume empty
-        assert!(list.len() >= 0);
+        let _ = list;
     }
 
     #[test]
