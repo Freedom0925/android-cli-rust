@@ -8,13 +8,15 @@ mod proto_types {
     include!(concat!(env!("OUT_DIR"), "/android.sdk.rs"));
 }
 
-// Use renamed aliases for protobuf types
-use proto_types::PackageList;
+// Import generated types for internal conversions
 use proto_types::Revision as RevisionProto;
 use proto_types::Sdk as SdkProto;
 use proto_types::SdkEntry as SdkEntryProto;
 
-pub use proto_types::{Architecture, Channel, Platform};
+// Export proto types for use in repository.rs
+pub use proto_types::{
+    Architecture, Artifact, Archive, Channel, Dependency, Package, PackageList, Platform,
+};
 
 /// Helper methods for Platform enum
 impl Platform {

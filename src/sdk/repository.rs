@@ -1,9 +1,11 @@
 use crate::http::Downloader;
 use crate::sdk::model::{Revision, Sdk, SdkEntry};
+use crate::sdk::protobuf::PackageList;
 use anyhow::{Context, Result};
+use prost::Message;
 use tracing::debug;
 
-/// Release channel
+/// Release channel (local representation, different from proto enum values)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Channel {
     Stable = 0,
@@ -12,6 +14,18 @@ pub enum Channel {
 }
 
 impl Channel {
+    /// Convert from proto Channel enum value
+    /// Proto: Unspecified=0, Canary=1, Beta=2, Stable=3
+    /// Local: Stable=0, Beta=1, Canary=2
+    pub fn from_proto(proto_channel: crate::sdk::protobuf::Channel) -> Self {
+        match proto_channel {
+            crate::sdk::protobuf::Channel::Stable => Channel::Stable,
+            crate::sdk::protobuf::Channel::Beta => Channel::Beta,
+            crate::sdk::protobuf::Channel::Canary => Channel::Canary,
+            crate::sdk::protobuf::Channel::Unspecified => Channel::Stable,
+        }
+    }
+
     pub fn from_int(i: i32) -> Self {
         match i {
             0 => Channel::Stable,
@@ -31,7 +45,7 @@ impl Channel {
     }
 }
 
-/// Platform (OS)
+/// Platform (OS) - local representation matching proto values
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     Linux = 1,
@@ -40,6 +54,16 @@ pub enum Platform {
 }
 
 impl Platform {
+    /// Convert from proto Platform enum
+    pub fn from_proto(proto_platform: crate::sdk::protobuf::Platform) -> Self {
+        match proto_platform {
+            crate::sdk::protobuf::Platform::Linux => Platform::Linux,
+            crate::sdk::protobuf::Platform::Mac => Platform::Mac,
+            crate::sdk::protobuf::Platform::Windows => Platform::Windows,
+            crate::sdk::protobuf::Platform::Unspecified => Platform::Linux,
+        }
+    }
+
     pub fn from_int(i: i32) -> Self {
         match i {
             1 => Platform::Linux,
@@ -59,7 +83,7 @@ impl Platform {
     }
 }
 
-/// Architecture
+/// Architecture - local representation matching proto values
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     X86 = 1,
@@ -68,6 +92,16 @@ pub enum Architecture {
 }
 
 impl Architecture {
+    /// Convert from proto Architecture enum
+    pub fn from_proto(proto_arch: crate::sdk::protobuf::Architecture) -> Self {
+        match proto_arch {
+            crate::sdk::protobuf::Architecture::X64 => Architecture::X64,
+            crate::sdk::protobuf::Architecture::X86 => Architecture::X86,
+            crate::sdk::protobuf::Architecture::Aarch64 => Architecture::Aarch64,
+            crate::sdk::protobuf::Architecture::Unspecified => Architecture::X64,
+        }
+    }
+
     pub fn from_int(i: i32) -> Self {
         match i {
             1 => Architecture::X86,
@@ -189,274 +223,118 @@ impl Repository {
             .fetch_bytes(url)
             .with_context(|| format!("Failed to fetch repository from: {}", url))?;
 
-        // Parse protobuf PackageList
+        // Parse protobuf PackageList using prost
         Self::parse_protobuf(&bytes)
     }
 
-    /// Parse protobuf PackageList
+    /// Parse protobuf PackageList using prost
     fn parse_protobuf(bytes: &[u8]) -> Result<Self> {
-        // The package_list.binpb is a protobuf message
-        Self::parse_package_list(bytes)
-    }
+        let proto_list = PackageList::decode(bytes)
+            .context("Failed to decode PackageList protobuf")?;
 
-    /// Parse PackageList protobuf message
-    fn parse_package_list(bytes: &[u8]) -> Result<Self> {
-        use std::io::Cursor;
-
-        let mut packages = Vec::new();
-        let mut cursor = Cursor::new(bytes);
-
-        // Simple protobuf parsing - field 1 is repeated Package
-        while cursor.position() < bytes.len() as u64 {
-            let tag = read_varint(&mut cursor)?;
-            let field_num = tag >> 3;
-            let wire_type = tag & 0x7;
-
-            if field_num == 1 && wire_type == 2 {
-                // Package message
-                let len = read_varint(&mut cursor)?;
-                let start = cursor.position() as usize;
-                let end = start + len as usize;
-
-                if end <= bytes.len() {
-                    let pkg_bytes = &bytes[start..end];
-                    if let Some(pkg) = Self::parse_package(pkg_bytes) {
-                        packages.push(pkg);
-                    }
-                }
-
-                cursor.set_position(end as u64);
-            } else {
-                // Skip unknown field
-                skip_field(&mut cursor, wire_type)?;
-            }
-        }
+        let packages = proto_list
+            .packages
+            .into_iter()
+            .filter_map(|proto_pkg| Self::convert_package(proto_pkg))
+            .collect();
 
         Ok(Self { packages })
     }
 
-    /// Parse a single Package protobuf message
-    fn parse_package(bytes: &[u8]) -> Option<Package> {
-        let mut cursor = Cursor::new(bytes);
-
-        let mut path = String::new();
-        let mut revision = Revision::new(0);
-        let mut display_name = String::new();
-        let mut channel = Channel::Stable;
-        let mut archives = Vec::new();
-        let mut dependencies = Vec::new();
-        let mut obsolete = false;
-
-        while cursor.position() < bytes.len() as u64 {
-            let tag = read_varint(&mut cursor).ok()?;
-            let field_num = tag >> 3;
-            let wire_type = tag & 0x7;
-
-            match field_num {
-                1 => {
-                    // obsolete (bool)
-                    obsolete = read_varint(&mut cursor).ok()? != 0;
-                }
-                2 => {
-                    // path (string)
-                    path = read_string(&mut cursor).ok()?;
-                }
-                3 => {
-                    // revision (message)
-                    let len = read_varint(&mut cursor).ok()?;
-                    let start = cursor.position() as usize;
-                    if start + len as usize <= bytes.len() {
-                        revision = Self::parse_revision(&bytes[start..start + len as usize]);
-                    }
-                    cursor.set_position((start + len as usize) as u64);
-                }
-                4 => {
-                    // display_name (string)
-                    display_name = read_string(&mut cursor).ok()?;
-                }
-                7 => {
-                    // channel (int32)
-                    channel = Channel::from_int(read_varint(&mut cursor).ok()? as i32);
-                }
-                8 => {
-                    // archives (repeated message)
-                    let len = read_varint(&mut cursor).ok()?;
-                    let start = cursor.position() as usize;
-                    if start + len as usize <= bytes.len() {
-                        if let Some(archive) =
-                            Self::parse_archive(&bytes[start..start + len as usize])
-                        {
-                            archives.push(archive);
-                        }
-                    }
-                    cursor.set_position((start + len as usize) as u64);
-                }
-                6 => {
-                    // dependencies (repeated message)
-                    let len = read_varint(&mut cursor).ok()?;
-                    let start = cursor.position() as usize;
-                    if start + len as usize <= bytes.len() {
-                        if let Some(dep) =
-                            Self::parse_dependency(&bytes[start..start + len as usize])
-                        {
-                            dependencies.push(dep);
-                        }
-                    }
-                    cursor.set_position((start + len as usize) as u64);
-                }
-                _ => {
-                    skip_field(&mut cursor, wire_type).ok();
-                }
-            }
-        }
-
-        if path.is_empty() {
+    /// Convert proto Package to local Package
+    fn convert_package(proto_pkg: crate::sdk::protobuf::Package) -> Option<Package> {
+        if proto_pkg.path.is_empty() {
             return None;
         }
 
+        let revision = proto_pkg
+            .revision
+            .map(|r| Revision {
+                major: r.major,
+                minor: if r.minor != 0 { Some(r.minor) } else { None },
+                micro: if r.micro != 0 { Some(r.micro) } else { None },
+                preview: if r.preview != 0 { Some(r.preview) } else { None },
+            })
+            .unwrap_or_else(|| Revision::new(0));
+
+        let channel = Channel::from_proto(
+            crate::sdk::protobuf::Channel::try_from(proto_pkg.channel).unwrap_or(
+                crate::sdk::protobuf::Channel::Stable,
+            ),
+        );
+
+        let archives = proto_pkg
+            .archives
+            .into_iter()
+            .filter_map(|a| Self::convert_archive(a))
+            .collect();
+
+        let dependencies = proto_pkg
+            .dependencies
+            .into_iter()
+            .filter_map(|d| Self::convert_dependency(d))
+            .collect();
+
         Some(Package {
-            path,
+            path: proto_pkg.path,
             revision,
-            display_name,
-            license_name: None,
+            display_name: proto_pkg.display_name,
+            license_name: if proto_pkg.license_name.is_empty() {
+                None
+            } else {
+                Some(proto_pkg.license_name)
+            },
             dependencies,
             channel,
             archives,
-            obsolete,
+            obsolete: proto_pkg.obsolete,
         })
     }
 
-    /// Parse Revision protobuf message
-    fn parse_revision(bytes: &[u8]) -> Revision {
-        let mut cursor = Cursor::new(bytes);
-        let mut major = 0;
-        let mut minor = None;
-        let mut micro = None;
+    /// Convert proto Archive to local Archive
+    fn convert_archive(proto_archive: crate::sdk::protobuf::Archive) -> Option<Archive> {
+        let artifact = proto_archive.artifact.map(|a| Artifact {
+            size: a.size as u64,
+            checksum: a.checksum,
+            url: a.url,
+        })?;
 
-        while cursor.position() < bytes.len() as u64 {
-            let tag = read_varint(&mut cursor).unwrap_or(0);
-            let field_num = tag >> 3;
+        let host_os = Platform::from_proto(
+            crate::sdk::protobuf::Platform::try_from(proto_archive.host_os).unwrap_or(
+                crate::sdk::protobuf::Platform::Linux,
+            ),
+        );
 
-            match field_num {
-                1 => major = read_varint(&mut cursor).unwrap_or(0) as i32,
-                2 => minor = Some(read_varint(&mut cursor).unwrap_or(0) as i32),
-                3 => micro = Some(read_varint(&mut cursor).unwrap_or(0) as i32),
-                _ => {
-                    let wt = tag & 0x7;
-                    skip_field(&mut cursor, wt).ok();
-                }
-            }
-        }
+        let host_arch = Architecture::from_proto(
+            crate::sdk::protobuf::Architecture::try_from(proto_archive.host_arch).unwrap_or(
+                crate::sdk::protobuf::Architecture::X64,
+            ),
+        );
 
-        Revision {
-            major,
-            minor,
-            micro,
-            preview: None,
-        }
-    }
-
-    /// Parse Archive protobuf message
-    fn parse_archive(bytes: &[u8]) -> Option<Archive> {
-        let mut cursor = Cursor::new(bytes);
-        let mut artifact = None;
-        let mut host_os = Platform::current();
-        let mut host_arch = Architecture::current();
-
-        while cursor.position() < bytes.len() as u64 {
-            let tag = read_varint(&mut cursor).ok()?;
-            let field_num = tag >> 3;
-            let wire_type = tag & 0x7;
-
-            match field_num {
-                1 => {
-                    // artifact
-                    let len = read_varint(&mut cursor).ok()?;
-                    let start = cursor.position() as usize;
-                    if start + len as usize <= bytes.len() {
-                        artifact = Self::parse_artifact(&bytes[start..start + len as usize]);
-                    }
-                    cursor.set_position((start + len as usize) as u64);
-                }
-                2 => {
-                    let os_val = read_varint(&mut cursor).ok()? as i32;
-                    host_os = Platform::from_int(os_val);
-                }
-                3 => {
-                    let arch_val = read_varint(&mut cursor).ok()? as i32;
-                    host_arch = Architecture::from_int(arch_val);
-                }
-                _ => {
-                    skip_field(&mut cursor, wire_type).ok();
-                }
-            }
-        }
-
-        artifact.map(|a| Archive {
-            artifact: a,
+        Some(Archive {
+            artifact,
             host_os,
             host_arch,
         })
     }
 
-    /// Parse Artifact protobuf message
-    fn parse_artifact(bytes: &[u8]) -> Option<Artifact> {
-        let mut cursor = Cursor::new(bytes);
-        let mut size = 0;
-        let mut checksum = String::new();
-        let mut url = String::new();
-
-        while cursor.position() < bytes.len() as u64 {
-            let tag = read_varint(&mut cursor).ok()?;
-            let field_num = tag >> 3;
-            let wire_type = tag & 0x7;
-
-            match field_num {
-                1 => size = read_varint(&mut cursor).ok()?,
-                2 => checksum = read_string(&mut cursor).ok()?,
-                3 => url = read_string(&mut cursor).ok()?,
-                _ => {
-                    skip_field(&mut cursor, wire_type).ok();
-                }
-            }
+    /// Convert proto Dependency to local Dependency
+    fn convert_dependency(proto_dep: crate::sdk::protobuf::Dependency) -> Option<Dependency> {
+        if proto_dep.path.is_empty() {
+            return None;
         }
 
-        Some(Artifact {
-            size,
-            checksum,
-            url,
+        let min_revision = proto_dep.min_revision.map(|r| Revision {
+            major: r.major,
+            minor: if r.minor != 0 { Some(r.minor) } else { None },
+            micro: if r.micro != 0 { Some(r.micro) } else { None },
+            preview: None,
+        });
+
+        Some(Dependency {
+            path: proto_dep.path,
+            min_revision,
         })
-    }
-
-    /// Parse Dependency protobuf message
-    fn parse_dependency(bytes: &[u8]) -> Option<Dependency> {
-        let mut cursor = Cursor::new(bytes);
-        let mut path = String::new();
-        let mut min_revision = None;
-
-        while cursor.position() < bytes.len() as u64 {
-            let tag = read_varint(&mut cursor).ok()?;
-            let field_num = tag >> 3;
-            let wire_type = tag & 0x7;
-
-            match field_num {
-                1 => path = read_string(&mut cursor).ok()?,
-                2 => {
-                    let len = read_varint(&mut cursor).ok()?;
-                    let start = cursor.position() as usize;
-                    if start + len as usize <= bytes.len() {
-                        min_revision =
-                            Some(Self::parse_revision(&bytes[start..start + len as usize]));
-                    }
-                    cursor.set_position((start + len as usize) as u64);
-                }
-                _ => {
-                    skip_field(&mut cursor, wire_type).ok();
-                }
-            }
-        }
-
-        Some(Dependency { path, min_revision })
     }
 
     /// Find packages matching a path pattern
@@ -655,67 +533,3 @@ impl Repository {
     }
 }
 
-// Protobuf helper functions
-
-use std::io::Cursor;
-use std::io::Read;
-
-fn read_varint(cursor: &mut Cursor<&[u8]>) -> Result<u64> {
-    let mut result: u64 = 0;
-    let mut shift = 0;
-
-    loop {
-        let mut byte = [0u8; 1];
-        cursor.read_exact(&mut byte)?;
-        let b = byte[0];
-
-        result |= ((b & 0x7F) as u64) << shift;
-
-        if b & 0x80 == 0 {
-            break;
-        }
-
-        shift += 7;
-        if shift >= 64 {
-            return Err(anyhow::anyhow!("Varint too long"));
-        }
-    }
-
-    Ok(result)
-}
-
-fn read_string(cursor: &mut Cursor<&[u8]>) -> Result<String> {
-    let len = read_varint(cursor)?;
-    let start = cursor.position() as usize;
-    let end = start + len as usize;
-
-    if end > cursor.get_ref().len() {
-        return Err(anyhow::anyhow!("String length exceeds buffer"));
-    }
-
-    let s = String::from_utf8_lossy(&cursor.get_ref()[start..end]).to_string();
-    cursor.set_position(end as u64);
-
-    Ok(s)
-}
-
-fn skip_field(cursor: &mut Cursor<&[u8]>, wire_type: u64) -> Result<()> {
-    match wire_type {
-        0 => {
-            read_varint(cursor)?;
-        } // Varint
-        1 => {
-            cursor.set_position(cursor.position() + 8);
-        } // 64-bit
-        2 => {
-            // Length-delimited
-            let len = read_varint(cursor)?;
-            cursor.set_position(cursor.position() + len);
-        }
-        5 => {
-            cursor.set_position(cursor.position() + 4);
-        } // 32-bit
-        _ => return Err(anyhow::anyhow!("Unknown wire type: {}", wire_type)),
-    }
-    Ok(())
-}
