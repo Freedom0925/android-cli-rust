@@ -1002,21 +1002,31 @@ fn execute_init(force: bool, ctx: &Context) -> Result<()> {
     std::fs::create_dir_all(&storage_path)?;
     println!("Created storage: {}", storage_path.display());
 
-    // Create skills directories
+    // Get user home directory
     let home = ctx.sys_info.user_home.clone();
-    let skills_dir = home.join(".claude").join("skills");
-    std::fs::create_dir_all(&skills_dir)?;
-    println!("Created skills directory: {}", skills_dir.display());
 
-    // Install bundled android-cli skill
-    let bundled_skill_source = skills_dir.join("android-cli");
-    let skill_already_installed = bundled_skill_source.exists() && bundled_skill_source.join("SKILL.md").exists();
+    // Install bundled android-cli skill to multiple AI agent directories
+    // Matches Google original behavior
+    let agent_locations = [
+        ".gemini/antigravity/skills",
+        ".claude/skills",
+        ".gemini/skills",
+        ".config/opencode/skills",
+        ".trae-cn/skills",
+    ];
 
-    if !skill_already_installed || force {
-        std::fs::create_dir_all(&bundled_skill_source)?;
+    for agent_path in &agent_locations {
+        let skills_dir = home.join(agent_path);
+        std::fs::create_dir_all(&skills_dir)?;
 
-        // Create SKILL.md with Android CLI development instructions
-        let skill_md_content = r#"---
+        let bundled_skill_source = skills_dir.join("android-cli");
+        let skill_already_installed = bundled_skill_source.exists() && bundled_skill_source.join("SKILL.md").exists();
+
+        if !skill_already_installed || force {
+            std::fs::create_dir_all(&bundled_skill_source)?;
+
+            // Create SKILL.md with Android CLI development instructions
+            let skill_md_content = r#"---
 name: android-cli
 description: Android CLI development skill for AI agents
 version: "1.0"
@@ -1096,15 +1106,11 @@ When analyzing an Android project, `android describe --project-dir` provides:
 3. Verify device/emulator availability before running apps
 4. Analyze project structure before making build changes
 "#;
-        std::fs::write(bundled_skill_source.join("SKILL.md"), skill_md_content)?;
-
-        if skill_already_installed && force {
-            println!("Reinstalled bundled skill: android-cli");
-        } else {
-            println!("Installed bundled skill: android-cli");
+            std::fs::write(bundled_skill_source.join("SKILL.md"), skill_md_content)?;
+            println!("Skill 'android-cli' installed to {}/{}", home.display(), agent_path);
+        } else if skill_already_installed && !force {
+            println!("Skill 'android-cli' already installed to {}/{} (use --force to reinstall)", home.display(), agent_path);
         }
-    } else {
-        println!("Bundled skill android-cli already installed (use --force to reinstall)");
     }
 
     // Verify SDK path

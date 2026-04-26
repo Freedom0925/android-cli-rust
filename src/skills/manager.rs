@@ -486,36 +486,56 @@ This skill helps Claude work with Android projects using the CLI.
 
     /// List installed skills
     pub fn list(&self, agent: Option<&str>, project: Option<&PathBuf>) -> Result<Vec<Skill>> {
-        let base_dir = if let Some(proj) = project {
-            proj.join(".claude")
-        } else {
-            self.user_skills_dir.clone()
-        };
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
+
+        // Check multiple AI agent directories (matches Google original)
+        let agent_paths = [
+            ".gemini/antigravity/skills",
+            ".claude/skills",
+            ".gemini/skills",
+            ".config/opencode/skills",
+            ".trae-cn/skills",
+        ];
 
         let mut skills = Vec::new();
+        let mut seen_names = std::collections::HashSet::new();
 
-        if !base_dir.exists() {
-            return Ok(skills);
-        }
+        for agent_path in &agent_paths {
+            let base_dir = if let Some(proj) = project {
+                proj.join(".claude")
+            } else {
+                home.join(agent_path)
+            };
 
-        for entry in fs::read_dir(&base_dir)? {
-            let entry = entry?;
-            let path = entry.path();
+            if !base_dir.exists() {
+                continue;
+            }
 
-            if path.is_dir() {
-                let skill_md = path.join("SKILL.md");
-                if skill_md.exists() {
-                    if let Ok(skill) = Skill::parse(&skill_md) {
-                        // Filter by agent if specified
-                        if let Some(a) = agent {
-                            if a == "claude" && !skill.has_claude {
+            for entry in fs::read_dir(&base_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    let skill_md = path.join("SKILL.md");
+                    if skill_md.exists() {
+                        if let Ok(skill) = Skill::parse(&skill_md) {
+                            // Skip duplicates (same skill name)
+                            if seen_names.contains(&skill.name) {
                                 continue;
                             }
-                            if a == "gemini" && !skill.has_gemini {
-                                continue;
+                            seen_names.insert(skill.name.clone());
+
+                            // Filter by agent if specified
+                            if let Some(a) = agent {
+                                if a == "claude" && !skill.has_claude {
+                                    continue;
+                                }
+                                if a == "gemini" && !skill.has_gemini {
+                                    continue;
+                                }
                             }
+                            skills.push(skill);
                         }
-                        skills.push(skill);
                     }
                 }
             }
