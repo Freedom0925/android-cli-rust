@@ -2,7 +2,7 @@
 //!
 //! Based on Kotlin UIElement.java and LayoutCommand.kt
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::fs;
 use anyhow::{Result, Context, bail};
@@ -18,9 +18,6 @@ pub use serializer::{ElementSerializer, ElementDiffSerializer, DiffSummary};
 // Import Region trait from interact module
 use crate::interact::Region;
 use crate::vision::Rect;
-
-/// Maximum recursion depth for UI hierarchy parsing
-const MAX_PARSE_DEPTH: i32 = 100;
 
 /// Interaction attributes (matches Kotlin UIElement.interactionAttrs)
 const INTERACTION_ATTRS: [&str; 6] = [
@@ -365,45 +362,40 @@ impl LayoutCommand {
     }
 }
 
-/// Build tree using stack algorithm (matches Kotlin UIElement.buildTree)
-fn build_tree(xml: &str) -> Result<UiNode> {
-    let start = xml.find("<node")
+/// Build tree recursively from XML (matches Kotlin UIElement.buildTree)
+pub fn build_tree(xml: &str) -> Result<UiNode> {
+    // Skip <?xml and <hierarchy> wrapper
+    let node_start = xml.find("<node")
         .ok_or_else(|| anyhow::anyhow!("No node found in XML"))?;
 
-    // Parse first element
-    let (first_element, first_end) = parse_single_element(xml, start)?;
+    build_tree_recursive(xml, node_start)
+}
 
-    // Stack-based tree building with parent indices
-    // Stack entry: (parent_index in elements list, xml_position)
-    let mut stack: VecDeque<(usize, usize)> = VecDeque::new();
-    let mut elements: Vec<UiNode> = vec![first_element.clone()];
+/// Recursively build tree from XML position
+fn build_tree_recursive(xml: &str, start_pos: usize) -> Result<UiNode> {
+    let (element, tag_end) = parse_single_element(xml, start_pos)?;
+    let node_end = find_node_end(xml, start_pos)?;
 
-    // Add children of first element (index 0) to stack
-    let children = find_child_positions(xml, start, first_end)?;
-    for child_pos in children {
-        stack.push_back((0, child_pos)); // parent index = 0 (first element)
+    // Check if self-closing (no children)
+    if xml[start_pos..tag_end].ends_with("/>") {
+        return Ok(element);
     }
 
-    // Process stack
-    while let Some((parent_index, xml_pos)) = stack.pop_front() {
-        let (element, element_end) = parse_single_element(xml, xml_pos)?;
+    // Find children positions
+    let child_positions = find_child_positions(xml, start_pos, node_end)?;
 
-        // Add element to list and get its index
-        let element_index = elements.len();
-        elements.push(element.clone());
-
-        // Add child to parent using the known parent index
-        elements[parent_index].children.push(element.clone());
-
-        // Add this element's children to stack
-        let child_positions = find_child_positions(xml, xml_pos, element_end)?;
-        for child_pos in child_positions {
-            stack.push_back((element_index, child_pos));
-        }
+    // Build children recursively
+    let mut children = Vec::new();
+    for child_pos in child_positions {
+        let child = build_tree_recursive(xml, child_pos)?;
+        children.push(child);
     }
 
-    // Return root (first element)
-    Ok(elements.into_iter().next().unwrap_or_default())
+    // Assign children
+    let mut element = element;
+    element.children = children;
+
+    Ok(element)
 }
 
 /// Parse single element from XML (matches Kotlin parseFromXml)
@@ -441,21 +433,52 @@ fn parse_single_element(xml: &str, start: usize) -> Result<(UiNode, usize)> {
 }
 
 /// Find child node positions within a parent
+/// Searches from after the parent's opening tag to before the parent's closing tag
 fn find_child_positions(xml: &str, parent_start: usize, parent_end: usize) -> Result<Vec<usize>> {
     let mut positions = Vec::new();
-    let mut pos = parent_end;
-    let mut depth = 1;
+    let mut pos = parent_start;
+    let mut depth = 0;
 
+    // First, find the end of the opening tag (/> or >)
+    while pos < parent_end {
+        if xml[pos..].starts_with("/>") {
+            // Self-closing tag, no children
+            return Ok(positions);
+        } else if xml[pos..].starts_with(">") {
+            pos += 1;
+            depth = 1; // Now inside the node
+            break;
+        }
+        pos += 1;
+    }
+
+    // Now find direct child nodes at depth 1
+    // Track depth by checking each <node's tag end (self-closing vs non-self-closing)
     while pos < parent_end {
         if xml[pos..].starts_with("<node") {
-            positions.push(pos);
-            // Find this node's end
-            let node_end = find_node_end(xml, pos)?;
-            pos = node_end;
+            // Find this node's opening tag end
+            let tag_end = find_tag_end(xml, pos)?;
+            let is_self_closing = xml[pos..tag_end].ends_with("/>");
+
+            if depth == 1 {
+                // Direct child of parent
+                positions.push(pos);
+            }
+
+            // Move to after opening tag
+            pos = tag_end;
+
+            // If non-self-closing, increase depth (we're now inside this node)
+            if !is_self_closing {
+                depth += 1;
+            }
         } else if xml[pos..].starts_with("</node>") {
             depth -= 1;
             pos += 7;
-            if depth == 0 { break; }
+            if depth == 0 {
+                // Back to parent level, done
+                break;
+            }
         } else {
             pos += 1;
         }
@@ -492,7 +515,9 @@ fn compute_keys_recursive(parent: &mut UiNode, parent_key: &Key, siblings: &[UiN
 /// Parse attributes from tag content
 fn parse_attributes(tag: &str) -> Result<HashMap<String, String>> {
     let mut attrs = HashMap::new();
-    let re = regex::Regex::new(r#"(\w+)="([^"]*)""#)?;
+    // Match attribute names including hyphens and other valid XML attribute chars
+    // XML attribute names can contain letters, digits, hyphens, underscores, colons, periods
+    let re = regex::Regex::new(r#"([a-zA-Z0-9_\-:.]+)="([^"]*)""#)?;
     for cap in re.captures_iter(tag) {
         attrs.insert(cap[1].to_string(), cap[2].to_string());
     }
@@ -614,5 +639,48 @@ mod tests {
 
         let node3 = UiNode { text: "Different".to_string(), ..node1.clone() };
         assert!(!node1.has_same_attributes(&node3));
+    }
+
+    #[test]
+    fn test_build_tree_nested() {
+        // Test with nested nodes
+        let xml = r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" class="FrameLayout"><node index="0" class="ScrollView"><node index="0" class="ViewPager"><node index="0" class="TextView" text="Sun"/></node><node index="1" class="TextView" text="Play Store"/></node><node index="1" class="View"/><node index="2" class="TextView" text="Phone"/></node></hierarchy>"#;
+
+        let root = build_tree(xml).unwrap();
+        assert_eq!(root.clazz, "FrameLayout");
+        assert_eq!(root.children.len(), 3); // ScrollView, View, Phone TextView
+
+        // Check ScrollView
+        let scroll = &root.children[0];
+        assert_eq!(scroll.clazz, "ScrollView");
+        assert_eq!(scroll.children.len(), 2); // ViewPager and Play Store TextView
+
+        // Check ViewPager
+        let pager = &scroll.children[0];
+        assert_eq!(pager.clazz, "ViewPager");
+        assert_eq!(pager.children.len(), 1); // Sun TextView
+
+        // Check Sun TextView
+        let sun = &pager.children[0];
+        assert_eq!(sun.clazz, "TextView");
+        assert_eq!(sun.text, "Sun");
+        assert_eq!(sun.children.len(), 0); // Self-closing, no children
+
+        // Check Play Store TextView
+        let play = &scroll.children[1];
+        assert_eq!(play.clazz, "TextView");
+        assert_eq!(play.text, "Play Store");
+        assert_eq!(play.children.len(), 0); // Self-closing
+
+        // Check View (self-closing)
+        let view = &root.children[1];
+        assert_eq!(view.clazz, "View");
+        assert_eq!(view.children.len(), 0);
+
+        // Check Phone TextView
+        let phone = &root.children[2];
+        assert_eq!(phone.clazz, "TextView");
+        assert_eq!(phone.text, "Phone");
+        assert_eq!(phone.children.len(), 0);
     }
 }

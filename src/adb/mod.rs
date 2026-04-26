@@ -538,6 +538,73 @@ impl AdbService {
             Ok(None)
         }
     }
+
+    /// Launch app using monkey (more reliable than am start)
+    /// Monkey launches the default launchable activity
+    pub fn monkey_launch(&self, serial: &str, package: &str) -> Result<()> {
+        let output = Command::new(&self.adb_path)
+            .arg("-s").arg(serial)
+            .arg("shell").arg("monkey")
+            .arg("-p").arg(package)
+            .arg("-c").arg("android.intent.category.LAUNCHER")
+            .arg("1")
+            .output()
+            .context("Failed to launch app with monkey")?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.contains("Events injected") {
+            println!("Launched {} (using monkey)", package);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Failed to launch app: {}", stdout))
+        }
+    }
+
+    /// Get list of installed packages matching a pattern
+    pub fn list_packages(&self, serial: &str, filter: Option<&str>) -> Result<Vec<String>> {
+        let mut cmd = Command::new(&self.adb_path);
+        cmd.arg("-s").arg(serial)
+            .arg("shell").arg("pm").arg("list").arg("packages");
+
+        if let Some(f) = filter {
+            cmd.arg(f);
+        }
+
+        let output = cmd.output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        let packages: Vec<String> = stdout.lines()
+            .filter(|l| l.starts_with("package:"))
+            .map(|l| l.replace("package:", "").trim().to_string())
+            .collect();
+
+        Ok(packages)
+    }
+
+    /// Get launchable activity for a package using dumpsys
+    pub fn get_launchable_activity(&self, serial: &str, package: &str) -> Result<Option<String>> {
+        let output = Command::new(&self.adb_path)
+            .arg("-s").arg(serial)
+            .arg("shell").arg("cmd").arg("package")
+            .arg("resolve-activity")
+            .arg("--brief")
+            .arg("-a").arg("android.intent.action.MAIN")
+            .arg("-c").arg("android.intent.category.LAUNCHER")
+            .arg(package)
+            .output()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Output format: "Activity name: com.package/com.package.Activity"
+        for line in stdout.lines() {
+            if line.contains("Activity name:") {
+                let activity = line.split(':').nth(1)
+                    .map(|s| s.trim().to_string());
+                return Ok(activity);
+            }
+        }
+
+        Ok(None)
+    }
 }
 #[cfg(test)]
 mod tests {

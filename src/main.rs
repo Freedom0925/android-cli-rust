@@ -522,12 +522,16 @@ enum SkillsCommands {
 
 #[derive(Subcommand)]
 enum DocsCommands {
-    /// Search Android documentation
+    /// Search Android documentation using KB local index
     Search {
         /// Search query
         query: String,
     },
-    /// Fetch documentation content from URL
+    /// Show KB index statistics
+    Stats,
+    /// Clear KB cache (re-download on next search)
+    Clear,
+    /// [deprecated] Fetch is not available with KB-based search
     Fetch {
         /// URL to fetch
         url: String,
@@ -544,6 +548,12 @@ enum ScreenCommands {
         /// Draws labeled bounding boxes around UI elements
         #[arg(long, short = 'a')]
         annotate: bool,
+        /// Cluster merge threshold for feature detection (default: 10)
+        #[arg(long, default_value = "10")]
+        cluster_merge_threshold: i32,
+        /// Output intermediate debug images to debug/ directory
+        #[arg(long)]
+        debug: bool,
     },
     /// Resolve annotated screenshot coordinates
     /// Substitutes bounding box coordinates from a annotated screenshot into a string.
@@ -857,22 +867,41 @@ fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: 
         first.serial.clone()
     };
 
+    // Get package list before installation (for detecting new package)
+    let packages_before = adb.list_packages(&target_device, None)?;
+
     // Install APKs
     let paths: Vec<PathBuf> = apks.iter().map(PathBuf::from).collect();
+    println!("Installing APKs: {}", paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
+
     if paths.len() == 1 {
         adb.install(&target_device, &paths[0])?;
     } else {
         adb.install_multiple(&target_device, &paths)?;
     }
+    println!("Installation completed successfully");
 
-    // Get package name from APK
-    let package = get_package_from_apk(&paths[0])?;
+    // Get package name - try multiple methods
+    let package = get_package_from_apk_or_device(&paths[0], &adb, &target_device, &packages_before, &ctx.sdk_path)?;
 
-    // Launch activity
+    println!("App loaded: {}", package);
+
+    // Launch activity using monkey (more reliable)
     if type_ == "activity" {
-        let activity_name = activity.clone()
-            .unwrap_or_else(|| format!("{}.MainActivity", package));
-        adb.launch_activity(&target_device, &package, &activity_name)?;
+        if let Some(act) = activity {
+            // Use specified activity
+            let full_activity = if act.starts_with('.') {
+                format!("{}{}", package, act)
+            } else {
+                act.to_string()
+            };
+            println!("Selected component: {}", full_activity);
+            adb.launch_activity(&target_device, &package, &full_activity)?;
+        } else {
+            // Use monkey to launch default activity
+            println!("Launching {} (using monkey)", package);
+            adb.monkey_launch(&target_device, &package)?;
+        }
     }
 
     if debug {
@@ -882,35 +911,112 @@ fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: 
     Ok(())
 }
 
-fn get_package_from_apk(apk_path: &PathBuf) -> Result<String> {
-    // Use aapt to get package name (or parse APK manifest)
-    let output = std::process::Command::new("aapt")
-        .arg("dump").arg("badging").arg(apk_path)
-        .output();
+/// Get package name from APK or detect from device after installation
+fn get_package_from_apk_or_device(apk_path: &PathBuf, adb: &AdbService, serial: &str, packages_before: &[String], sdk_path: &PathBuf) -> Result<String> {
+    // Find aapt in SDK build-tools (use highest version)
+    let aapt_path = find_aapt_in_sdk(sdk_path);
+
+    // First try aapt
+    let output = if let Some(aapt) = aapt_path {
+        std::process::Command::new(&aapt)
+            .arg("dump").arg("badging").arg(apk_path)
+            .output()
+    } else {
+        // Try system aapt as fallback
+        std::process::Command::new("aapt")
+            .arg("dump").arg("badging").arg(apk_path)
+            .output()
+    };
 
     match output {
-        Ok(o) => {
+        Ok(o) if o.status.success() => {
             let stdout = String::from_utf8_lossy(&o.stdout);
             for line in stdout.lines() {
                 if line.starts_with("package: name=") {
-                    let parts = line.split_whitespace().collect::<Vec<_>>();
-                    for part in parts {
+                    // Format: package: name='com.example.app' versionCode='1' versionName='1.0'
+                    for part in line.split_whitespace() {
                         if part.starts_with("name=") {
-                            return Ok(part.split('=').nth(1).unwrap_or("unknown").to_string());
+                            // Remove quotes if present
+                            let name = part.split('=').nth(1).unwrap_or("")
+                                .replace("'", "");
+                            if !name.is_empty() {
+                                return Ok(name);
+                            }
                         }
                     }
                 }
             }
-            Err(anyhow::anyhow!("Could not parse package name from APK"))
         }
-        Err(_) => {
-            // Fallback: use filename as package hint
-            let name = apk_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown");
-            println!("Warning: aapt not found, using '{}' as package hint", name);
-            Ok(name.replace(".apk", ""))
+        _ => {}
+    }
+
+    // aapt failed or not found - detect from device
+    println!("Warning: aapt not found or failed, detecting package from device...");
+
+    // Get packages after installation
+    let packages_after = adb.list_packages(serial, None)?;
+
+    // Find new package (installed since before)
+    let new_packages: Vec<String> = packages_after.iter()
+        .filter(|p| !packages_before.contains(p))
+        .cloned()
+        .collect();
+
+    if new_packages.len() == 1 {
+        println!("Detected new package: {}", new_packages[0]);
+        return Ok(new_packages[0].clone());
+    } else if new_packages.len() > 1 {
+        // Multiple new packages - try to match by APK name
+        let apk_name = apk_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+
+        for pkg in &new_packages {
+            // Try partial match on package name
+            if pkg.contains(&apk_name.replace("-v", "").replace(".apk", "").replace(" ", "").to_lowercase()) {
+                println!("Matched package by name: {}", pkg);
+                return Ok(pkg.clone());
+            }
         }
+
+        // Return first new package as fallback
+        println!("Multiple new packages detected, using first: {}", new_packages[0]);
+        return Ok(new_packages[0].clone());
+    }
+
+    // No new package detected - this shouldn't happen after successful install
+    Err(anyhow::anyhow!("Could not determine package name after installation"))
+}
+
+/// Find aapt in SDK build-tools directory (use highest version)
+fn find_aapt_in_sdk(sdk_path: &PathBuf) -> Option<PathBuf> {
+    let build_tools_dir = sdk_path.join("build-tools");
+    if !build_tools_dir.exists() {
+        return None;
+    }
+
+    // List all build-tools versions and pick the highest
+    let mut versions: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&build_tools_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            // Skip non-version directories (like .DS_Store)
+            if name.starts_with('.') { continue; }
+            // Check if aapt exists in this directory
+            if entry.path().join("aapt").exists() {
+                versions.push(name);
+            }
+        }
+    }
+
+    // Sort versions (highest first) - simple string sort works for X.Y.Z format
+    versions.sort();
+    versions.reverse();
+
+    if let Some(highest) = versions.first() {
+        Some(build_tools_dir.join(highest).join("aapt"))
+    } else {
+        None
     }
 }
 
@@ -1149,31 +1255,45 @@ fn execute_describe(project_dir: Option<&str>, ctx: &Context) -> Result<()> {
 fn execute_docs(command: Option<DocsCommands>) -> Result<()> {
     match command {
         Some(DocsCommands::Search { query }) => {
-            let docs_cli = DocsCLI::new()?;
+            let mut docs_cli = DocsCLI::new()?;
             let results = docs_cli.search(&query)?;
             DocsCLI::display_search_results(&results);
         }
         Some(DocsCommands::Fetch { url }) => {
-            let docs_cli = DocsCLI::new()?;
-            let content = docs_cli.fetch(&url)?;
-            println!("{}", content);
+            // KB-based approach doesn't support direct URL fetch
+            // Use the search command to find KB documents instead
+            println!("Note: The docs fetch command is not available with KB-based search.");
+            println!("Use 'android docs search <query>' to search the Android Knowledge Base.");
+            println!();
+            println!("KB documents are downloaded locally from:");
+            println!("  https://developer.android.com/static/api/kb/kb.zip");
+            println!();
+            println!("If you need to browse documentation online, visit:");
+            println!("  {}", url);
+        }
+        Some(DocsCommands::Stats) => {
+            let mut docs_cli = DocsCLI::new()?;
+            let stats = docs_cli.stats()?;
+            println!("KB Index Statistics:");
+            println!("  Documents: {}", stats.num_docs);
+            println!("  Index directory: {}", stats.index_dir.display());
+        }
+        Some(DocsCommands::Clear) => {
+            let mut docs_cli = DocsCLI::new()?;
+            docs_cli.clear_cache()?;
         }
         None => {
             // Default behavior when no subcommand provided
-            println!("Android CLI Documentation:");
-            println!("  SDK Manager: https://developer.android.com/tools/sdkmanager");
-            println!("  Emulator:    https://developer.android.com/tools/emulator");
-            println!("  ADB:         https://developer.android.com/tools/adb");
-            println!("  AVD Manager: https://developer.android.com/tools/avdmanager");
+            println!("Android CLI Documentation (KB-based search):");
+            println!("  Searches local Knowledge Base index for Android documentation");
             println!();
             println!("Commands:");
-            println!("  android docs search <query>  - Search Android documentation");
-            println!("  android docs fetch <url>     - Fetch documentation from URL");
-            println!("  android sdk install <package>  - Install SDK package");
-            println!("  android sdk list --all         - List available packages");
-            println!("  android emulator list          - List AVDs");
-            println!("  android device list            - List connected devices");
-            println!("  android run -a <apk>           - Install and run APK");
+            println!("  android docs search <query>  - Search Android KB");
+            println!("  android docs stats           - Show KB index statistics");
+            println!("  android docs clear           - Clear KB cache (re-download on next search)");
+            println!();
+            println!("KB ZIP source:");
+            println!("  https://developer.android.com/static/api/kb/kb.zip");
         }
     }
     Ok(())
@@ -1280,13 +1400,13 @@ fn execute_create(
 // Screen command
 fn execute_screen(command: ScreenCommands, ctx: &Context) -> Result<()> {
     // Get device from context or auto-select (matches Kotlin behavior)
-    let screen_cmd = ScreenCommand::new(&ctx.sdk_path)?;
+    let mut screen_cmd = ScreenCommand::new(&ctx.sdk_path)?;
 
     match command {
-        ScreenCommands::Capture { output, annotate } => {
+        ScreenCommands::Capture { output, annotate, cluster_merge_threshold, debug } => {
             // Kotlin version uses AdbKt.getDevice which auto-selects if no device specified
             // We pass None for device to match Kotlin behavior
-            screen_cmd.capture(None, output.as_deref(), annotate)?;
+            screen_cmd.capture(None, output.as_deref(), annotate, cluster_merge_threshold, debug)?;
         }
         ScreenCommands::Resolve { screenshot, string } => {
             let result = ResolveCommand::resolve(&screenshot, &string)?;

@@ -142,7 +142,8 @@ impl std::hash::Hash for PixelCluster {
 pub fn find_connected_clusters(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<PixelCluster> {
     let (width, height) = img.dimensions();
 
-    // Initialize labels array (0 = no label)
+    // Initialize labels array (0 = no label, labels[i] = parent of label i)
+    // Size is width * height + 1 to accommodate all possible labels (0 is unused)
     let mut labels: Vec<i32> = vec![0; (width * height + 1) as usize];
     let mut next_label: i32 = 1;
 
@@ -166,6 +167,7 @@ pub fn find_connected_clusters(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<Pixe
             if up == 0 && left == 0 {
                 // New region - assign new label
                 label_matrix[y as usize][x as usize] = next_label;
+                labels[next_label as usize] = next_label; // Initialize self-reference
                 next_label += 1;
             } else if up != 0 && left != 0 {
                 // Both neighbors have labels - merge them

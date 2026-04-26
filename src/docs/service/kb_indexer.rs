@@ -117,8 +117,8 @@ impl KbIndexerService {
         let (schema, fields) = KbSchema::build_schema();
         self.schema = fields;
 
-        // Check if index exists
-        let index_exists = self.index_dir.join("tantivy-0.4/meta.json").exists();
+        // Check if index exists (meta.json in index directory root)
+        let index_exists = self.index_dir.join("meta.json").exists();
 
         if index_exists {
             // Open existing index
@@ -136,6 +136,9 @@ impl KbIndexerService {
     }
 
     /// Build index from KB ZIP file
+    /// Matches Google's processZipFile implementation:
+    /// - Read all entries into memory
+    /// - For each .md/.md.txt file, find corresponding .json metadata
     pub fn build_index_from_zip(&mut self, zip_path: &Path) -> Result<usize> {
         self.init_index()?;
 
@@ -152,27 +155,45 @@ impl KbIndexerService {
         let mut archive = ZipArchive::new(file)
             .context("Failed to read ZIP archive")?;
 
-        let mut doc_count = 0;
-
-        // Process each file in ZIP
+        // First pass: read all entries into memory
+        let mut all_entries: HashMap<String, Vec<u8>> = HashMap::new();
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)
                 .context("Failed to get ZIP entry")?;
 
-            let filepath = file.name().to_string();
+            let name = file.name().to_string();
+            if !file.is_dir() {
+                let mut content = Vec::new();
+                file.read_to_end(&mut content)
+                    .context("Failed to read ZIP entry content")?;
+                all_entries.insert(name, content);
+            }
+        }
 
-            // Only process markdown files
-            if !filepath.ends_with(".md") {
+        let mut doc_count = 0;
+
+        // Second pass: process .md and .md.txt files with their .json metadata
+        for (filepath, content_bytes) in &all_entries {
+            // Check if this is a markdown file (.md or .md.txt)
+            if !filepath.ends_with(".md") && !filepath.ends_with(".md.txt") {
                 continue;
             }
 
-            // Read file content
-            let mut content = String::new();
-            file.read_to_string(&mut content)
-                .context("Failed to read ZIP entry content")?;
+            // Read markdown content
+            let md_content = String::from_utf8_lossy(content_bytes).to_string();
 
-            // Parse document
-            let kb_doc = KbDocFile::from_markdown(filepath.clone(), content);
+            // Find corresponding .json file
+            let json_path = Self::replace_md_extension_to_json(filepath);
+            let metadata = if let Some(json_bytes) = all_entries.get(&json_path) {
+                // Parse JSON metadata
+                let json_str = String::from_utf8_lossy(json_bytes);
+                Self::parse_json_metadata(&json_str)
+            } else {
+                HashMap::new()
+            };
+
+            // Create KbDocFile
+            let kb_doc = KbDocFile::with_metadata(filepath.clone(), md_content, metadata);
 
             // Add to index
             self.add_document(&writer, &kb_doc)?;
@@ -197,6 +218,35 @@ impl KbIndexerService {
             .context("Failed to reload index reader")?;
 
         Ok(doc_count)
+    }
+
+    /// Replace .md or .md.txt extension with .json
+    /// Matches Google's replaceMdExtensionToJson
+    fn replace_md_extension_to_json(path: &str) -> String {
+        if path.ends_with(".md.txt") {
+            path.replace(".md.txt", ".json")
+        } else if path.ends_with(".md") {
+            path.replace(".md", ".json")
+        } else {
+            path.to_string()
+        }
+    }
+
+    /// Parse JSON metadata (Map<String, String>)
+    fn parse_json_metadata(json_str: &str) -> HashMap<String, String> {
+        // Simple JSON parsing for flat key-value objects
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(json_str) {
+            if let Some(obj) = json_value.as_object() {
+                let mut metadata = HashMap::new();
+                for (key, value) in obj {
+                    if let Some(str_val) = value.as_str() {
+                        metadata.insert(key.clone(), str_val.to_string());
+                    }
+                }
+                return metadata;
+            }
+        }
+        HashMap::new()
     }
 
     /// Add a document to the index

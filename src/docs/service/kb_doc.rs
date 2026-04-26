@@ -30,7 +30,20 @@ pub struct KbDocFile {
 }
 
 impl KbDocFile {
-    /// Parse a document file from markdown content
+    /// Create KbDocFile with explicit metadata (matches Google's KbDocFile constructor)
+    pub fn with_metadata(filepath: String, content: String, metadata: HashMap<String, String>) -> Self {
+        // Extract summary from first 500 characters (matches Google's implementation)
+        let summary = content.chars().take(500).collect();
+
+        Self {
+            filepath,
+            summary,
+            content,
+            metadata,
+        }
+    }
+
+    /// Parse a document file from markdown content (legacy method)
     pub fn from_markdown(filepath: String, content: String) -> Self {
         let (metadata, body) = Self::parse_frontmatter(&content);
 

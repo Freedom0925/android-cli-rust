@@ -408,11 +408,24 @@ impl ScreenCommand {
 
     /// Capture screenshot from device
     pub fn capture(
-        &self,
+        &mut self,
         device: Option<&str>,
         output: Option<&str>,
         annotate: bool,
+        cluster_merge_threshold: i32,
+        debug: bool,
     ) -> Result<()> {
+        // Set parameters
+        self.cluster_merge_threshold = cluster_merge_threshold;
+        self.debug = debug;
+
+        if annotate {
+            // Use vision-based approach (matches Kotlin ScreenCommand)
+            // Sobel edge detection + clustering for feature detection
+            return self.capture_with_features(device, output);
+        }
+
+        // Simple screenshot without annotation
         let adb = self.adb_path();
 
         // Validate device ID if provided
@@ -442,29 +455,13 @@ impl ScreenCommand {
             bail!("Screenshot capture failed: {}", String::from_utf8_lossy(&output_data.stderr));
         }
 
-        let mut png_data = output_data.stdout;
-
-        // If annotate, dump UI hierarchy and add annotations
-        if annotate {
-            println!("Annotating UI elements...");
-            let elements = self.dump_ui_hierarchy(device)?;
-            png_data = self.annotate_screenshot(png_data, elements)?;
-        }
-
         // Determine output filename
         let output_path = match output {
             Some(path) => PathBuf::from(path),
-            None => {
-                let timestamp = chrono_timestamp();
-                if annotate {
-                    PathBuf::from(format!("screenshot_annotated_{}.png", timestamp))
-                } else {
-                    PathBuf::from(format!("screenshot_{}.png", timestamp))
-                }
-            }
+            None => PathBuf::from(format!("screenshot_{}.png", chrono_timestamp())),
         };
 
-        std::fs::write(&output_path, &png_data)
+        std::fs::write(&output_path, &output_data.stdout)
             .with_context(|| format!("Failed to write screenshot to {}", output_path.display()))?;
 
         println!("Screenshot saved to: {}", output_path.display());
@@ -703,24 +700,49 @@ struct AnnotationData {
 
 /// Parse UI dump XML to extract elements
 fn parse_ui_dump(xml: &str) -> Result<Vec<UiElement>> {
+    use crate::layout::build_tree;
+
+    // Use the layout module's tree parser for proper XML handling
+    let root = build_tree(xml)?;
+
+    // Flatten the tree and extract interactive elements
     let mut elements = Vec::new();
     let mut index = 0;
-
-    // Simple XML parsing for UI dump
-    // Looking for <node ...> elements
-    for line in xml.lines() {
-        if line.contains("<node") {
-            if let Ok(element) = parse_node_element(line, index) {
-                // Only include interactive or visible elements
-                if element.clickable || !element.text.is_empty() || !element.resource_id.is_empty() {
-                    elements.push(element);
-                    index += 1;
-                }
-            }
-        }
-    }
+    collect_interactive_elements(&root, &mut elements, &mut index);
 
     Ok(elements)
+}
+
+/// Recursively collect interactive elements from UI tree
+fn collect_interactive_elements(node: &crate::layout::UiNode, elements: &mut Vec<UiElement>, index: &mut i32) {
+    // Include elements that are clickable, have text, or have resource_id
+    if node.interactions.contains("clickable")
+        || !node.text.is_empty()
+        || !node.resource_id.is_empty() {
+
+        elements.push(UiElement {
+            index: *index,
+            text: node.text.clone(),
+            resource_id: node.resource_id.clone(),
+            class: node.clazz.clone(),
+            package: "".to_string(), // Package info not available in layout tree
+            bounds: Bounds {
+                left: node.bounds.min_x,
+                top: node.bounds.min_y,
+                right: node.bounds.max_x,
+                bottom: node.bounds.max_y,
+            },
+            clickable: node.interactions.contains("clickable"),
+            enabled: true,
+            visible: true,
+        });
+        *index += 1;
+    }
+
+    // Recurse into children
+    for child in &node.children {
+        collect_interactive_elements(child, elements, index);
+    }
 }
 
 /// Parse a single node element from XML line
@@ -1092,14 +1114,8 @@ mod tests {
 
     #[test]
     fn test_screen_command_parse_bounds_from_dump() {
-        let xml_dump = r#"<?xml version="1.0" encoding="UTF-8"?>
-<hierarchy>
-    <node index="0" text="" resource-id="" class="FrameLayout" package="com.app" bounds="[0,0][1080,2400]" clickable="false">
-        <node index="1" text="Hello" resource-id="com.app:id/title" class="TextView" package="com.app" bounds="[100,200][500,300]" clickable="false">
-            <node index="2" text="Click Me" resource-id="com.app:id/button" class="android.widget.Button" package="com.app" bounds="[100,500][400,600]" clickable="true"/>
-        </node>
-    </node>
-</hierarchy>"#;
+        // Use actual uiautomator format (single line, no whitespace)
+        let xml_dump = r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="FrameLayout" package="com.app" bounds="[0,0][1080,2400]" clickable="false"><node index="1" text="Hello" resource-id="com.app:id/title" class="TextView" package="com.app" bounds="[100,200][500,300]" clickable="false"><node index="2" text="Click Me" resource-id="com.app:id/button" class="android.widget.Button" package="com.app" bounds="[100,500][400,600]" clickable="true"/></node></node></hierarchy>"#;
 
         let elements = parse_ui_dump(xml_dump).unwrap();
 

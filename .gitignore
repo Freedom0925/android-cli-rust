@@ -2,3 +2,6 @@
 /Cargo.lock
 *.DS_Store
 .claude/
+
+# Decompiled Google source (for reference only, not for commit)
+google/
