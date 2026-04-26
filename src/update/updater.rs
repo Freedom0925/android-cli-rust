@@ -173,7 +173,8 @@ impl Updater {
         pb.finish_with_message("Download complete");
 
         // Compute final SHA256
-        let actual_sha256 = format!("{:x}", hasher.finalize());
+        let result = hasher.finalize();
+        let actual_sha256: String = result.iter().map(|b| format!("{:02x}", b)).collect();
         println!("Downloaded SHA256: {}", actual_sha256);
 
         // Verify SHA256 if expected hash is provided
