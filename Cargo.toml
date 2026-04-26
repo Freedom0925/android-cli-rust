@@ -79,7 +79,7 @@ lru = "0.12"
 encoding_rs = "0.8"
 
 [build-dependencies]
-prost-build = "0.12"
+prost-build = "0.14"
 
 [lib]
 name = "android_cli"
