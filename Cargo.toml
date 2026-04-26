@@ -16,7 +16,7 @@ reqwest = { version = "0.12", features = ["blocking", "stream", "rustls-tls"], d
 prost = "0.14"
 
 # SHA-1 hashing for CAS storage
-sha1 = "0.10"
+sha1 = "0.11"
 
 # SHA-256 for verification
 sha2 = "0.10"
