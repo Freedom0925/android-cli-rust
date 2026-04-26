@@ -16,6 +16,31 @@ use proto_types::SdkEntry as SdkEntryProto;
 
 pub use proto_types::{Architecture, Channel, Platform};
 
+/// Helper methods for Platform enum
+impl Platform {
+    /// Get current platform from system
+    pub fn current() -> Self {
+        match std::env::consts::OS {
+            "macos" => Platform::Mac,
+            "windows" => Platform::Windows,
+            _ => Platform::Linux,
+        }
+    }
+}
+
+/// Helper methods for Architecture enum
+impl Architecture {
+    /// Get current architecture from system
+    pub fn current() -> Self {
+        match std::env::consts::ARCH {
+            "x86" | "i686" => Architecture::X86,
+            "x86_64" | "amd64" => Architecture::X64,
+            "aarch64" | "arm64" => Architecture::Aarch64,
+            _ => Architecture::X64,
+        }
+    }
+}
+
 use crate::sdk::model::{Revision, Sdk, SdkEntry};
 use prost::Message;
 

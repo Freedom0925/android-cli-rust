@@ -4,6 +4,7 @@ use crate::sdk::diff::SdkDiff;
 use crate::sdk::{Channel, Repository, Revision, Sdk, SdkEntry, Storage};
 use anyhow::{anyhow, Context, Result};
 use std::path::{Path, PathBuf};
+use tracing::debug;
 
 /// SDK Manager - orchestrates SDK package management
 pub struct SdkManager {
@@ -867,41 +868,28 @@ impl SdkManager {
         );
 
         // Debug storage paths
-        #[cfg(debug_assertions)]
-        {
-            eprintln!(
-                "DEBUG: install_from_entry - storage.base_path={}",
-                self.storage.base_path.display()
-            );
-            eprintln!(
-                "DEBUG: install_from_entry - storage.archives_dir={}",
-                self.storage.archives_dir.display()
-            );
-            eprintln!(
-                "DEBUG: install_from_entry - storage.unzipped_dir={}",
-                self.storage.unzipped_dir.display()
-            );
-            eprintln!("DEBUG: install_from_entry - entry.sha1={}", entry.sha1);
-        }
+        debug!(
+            base_path = %self.storage.base_path.display(),
+            archives_dir = %self.storage.archives_dir.display(),
+            unzipped_dir = %self.storage.unzipped_dir.display(),
+            sha1 = %entry.sha1,
+            "install_from_entry: storage paths"
+        );
 
         // Download if needed
         if !self.storage.has_archive(&entry.sha1) {
-            #[cfg(debug_assertions)]
-            eprintln!("DEBUG: install_from_entry - downloading archive");
+            debug!("install_from_entry: downloading archive");
             self.download(&entry.sha1, entry.url.as_deref())?;
         } else {
-            #[cfg(debug_assertions)]
-            eprintln!("DEBUG: install_from_entry - archive already exists");
+            debug!("install_from_entry: archive already exists");
         }
 
         // Unzip
-        #[cfg(debug_assertions)]
-        eprintln!("DEBUG: install_from_entry - calling unzip");
+        debug!("install_from_entry: calling unzip");
         self.storage.unzip(&entry.sha1)?;
 
         // Install to SDK
-        #[cfg(debug_assertions)]
-        eprintln!("DEBUG: install_from_entry - calling install_to_sdk");
+        debug!("install_from_entry: calling install_to_sdk");
         self.storage
             .install_to_sdk(&entry.sha1, &self.sdk_path, &entry.path)?;
 

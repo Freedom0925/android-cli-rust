@@ -3,6 +3,7 @@ use sha1::{Digest, Sha1};
 use std::fs;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
+use tracing::debug;
 use walkdir::WalkDir;
 
 use crate::sdk::model::Sdk;
@@ -143,15 +144,11 @@ impl Storage {
         let archive_path = self.archives_dir.join(format!("{}.zip", sha));
         let unzipped_path = self.unzipped_dir.join(sha);
 
-        // Debug output
-        #[cfg(debug_assertions)]
-        eprintln!("DEBUG: unzip - archive_path={}", archive_path.display());
-        #[cfg(debug_assertions)]
-        eprintln!("DEBUG: unzip - unzipped_path={}", unzipped_path.display());
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "DEBUG: unzip - unzipped_dir={}",
-            self.unzipped_dir.display()
+        debug!(
+            archive_path = %archive_path.display(),
+            unzipped_path = %unzipped_path.display(),
+            unzipped_dir = %self.unzipped_dir.display(),
+            "unzip: starting"
         );
 
         // Check if already unzipped with content
@@ -160,8 +157,7 @@ impl Storage {
                 .map(|mut dir| dir.next().is_some())
                 .unwrap_or(false);
             if has_content {
-                #[cfg(debug_assertions)]
-                eprintln!("DEBUG: unzip - already exists with content");
+                debug!("unzip: already exists with content");
                 return Ok(unzipped_path);
             }
         }
@@ -190,8 +186,7 @@ impl Storage {
         let mut archive = zip::ZipArchive::new(reader)
             .with_context(|| format!("Failed to read ZIP archive: {}", archive_path.display()))?;
 
-        #[cfg(debug_assertions)]
-        eprintln!("DEBUG: unzip - archive has {} entries", archive.len());
+        debug!(entries = archive.len(), "unzip: archive opened");
 
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
@@ -213,8 +208,7 @@ impl Storage {
             }
         }
 
-        #[cfg(debug_assertions)]
-        eprintln!("DEBUG: unzip - completed successfully");
+        debug!("unzip: completed successfully");
 
         Ok(unzipped_path)
     }

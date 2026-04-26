@@ -1,6 +1,7 @@
 use crate::http::Downloader;
 use crate::sdk::model::{Revision, Sdk, SdkEntry};
 use anyhow::{Context, Result};
+use tracing::debug;
 
 /// Release channel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -500,20 +501,13 @@ impl Repository {
 
             if let Some(pkg) = pkg {
                 // Debug: print available archives
-                #[cfg(debug_assertions)]
-                {
-                    eprintln!("Package: {}", pkg.path);
-                    for archive in &pkg.archives {
-                        eprintln!(
-                            "  Archive: os={}, arch={}",
-                            archive.host_os as i32, archive.host_arch as i32
-                        );
-                    }
-                    eprintln!(
-                        "  Looking for: os={}, arch={}",
-                        current_platform as i32, current_arch as i32
-                    );
-                }
+                debug!(
+                    package = %pkg.path,
+                    archives = pkg.archives.len(),
+                    looking_for_os = current_platform as i32,
+                    looking_for_arch = current_arch as i32,
+                    "resolve: package found"
+                );
 
                 // Find archive for current platform
                 let archive = pkg.find_archive(current_platform, current_arch);

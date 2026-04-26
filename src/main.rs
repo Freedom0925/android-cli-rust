@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -10,6 +10,7 @@ use android_cli::emulator::AvdManager;
 use android_cli::layout::LayoutCommand;
 use android_cli::screen::{ResolveCommand, ScreenCommand};
 use android_cli::sdk::{Channel, SdkManager};
+use android_cli::sdk::protobuf::{Platform, Architecture};
 use android_cli::skills::SkillManager;
 use android_cli::template::{DeviceTemplates, TemplateProcessor};
 use android_cli::update::Updater;
@@ -695,7 +696,7 @@ impl SysInfoService {
     fn default_sdk_path(&self) -> PathBuf {
         match self.platform {
             Platform::Mac => self.user_home.join("Library/Android/sdk"),
-            Platform::Linux => self.user_home.join("Android/Sdk"),
+            Platform::Linux | Platform::Unspecified => self.user_home.join("Android/Sdk"),
             Platform::Windows => std::env::var("LOCALAPPDATA")
                 .map(|p| PathBuf::from(p).join("Android/Sdk"))
                 .ok()
@@ -708,31 +709,17 @@ impl SysInfoService {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Platform {
-    Linux,
-    Mac,
-    Windows,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Architecture {
-    X86,
-    X64,
-    Aarch64,
-}
-
 /// Get channel from canary/beta flags (matches Kotlin getChannel)
-fn get_channel_from_flags(canary: bool, beta: bool) -> Channel {
+fn get_channel_from_flags(canary: bool, beta: bool) -> Result<Channel> {
     if canary && beta {
-        panic!("Error: --canary and --beta flags cannot be set at the same time.");
+        bail!("--canary and --beta flags cannot be set at the same time");
     }
     if canary {
-        Channel::Canary
+        Ok(Channel::Canary)
     } else if beta {
-        Channel::Beta
+        Ok(Channel::Beta)
     } else {
-        Channel::Stable
+        Ok(Channel::Stable)
     }
 }
 
@@ -753,7 +740,7 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
             beta,
             force,
         } => {
-            let channel = get_channel_from_flags(canary, beta);
+            let channel = get_channel_from_flags(canary, beta)?;
             manager.install(&packages, channel, force)?;
         }
         SdkCommands::List {
@@ -763,7 +750,7 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
             canary,
             beta,
         } => {
-            let channel = get_channel_from_flags(canary, beta);
+            let channel = get_channel_from_flags(canary, beta)?;
             manager.list(all, all_versions, pattern.as_deref(), channel)?;
         }
         SdkCommands::Update {
@@ -772,7 +759,7 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
             beta,
             force,
         } => {
-            let channel = get_channel_from_flags(canary, beta);
+            let channel = get_channel_from_flags(canary, beta)?;
             let packages = package.as_ref().map(|p| vec![p.clone()]);
             manager.update(packages.as_deref(), channel, force)?;
         }
@@ -791,7 +778,7 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
             canary,
             beta,
         } => {
-            let channel = get_channel_from_flags(canary, beta);
+            let channel = get_channel_from_flags(canary, beta)?;
             for pkg in &packages {
                 manager.resolve(pkg, channel)?;
             }
@@ -1509,7 +1496,7 @@ fn execute_info(field: Option<&str>, ctx: &Context) -> Result<()> {
     // Get platform string
     let platform_str = match ctx.sys_info.platform {
         Platform::Mac => "macos",
-        Platform::Linux => "linux",
+        Platform::Linux | Platform::Unspecified => "linux",
         Platform::Windows => "windows",
     };
 
