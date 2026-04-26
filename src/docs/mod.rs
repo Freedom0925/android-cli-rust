@@ -1,13 +1,15 @@
-use anyhow::{Result, Context};
-use std::path::PathBuf;
+use anyhow::{Context, Result};
 use std::fs;
+use std::path::PathBuf;
 use std::time::Instant;
 
 pub mod service;
 
-pub use service::{KBDownloadService, KbIndexerService, KbDoc, KbDocFile, KbDownloadResult};
-pub use service::{KbSearchResult, KbFetchResult, KbSearchOptions, KbSearchResponse, SearchHit, IndexStats};
 use service::kb_download::KnowledgeBaseConstants;
+pub use service::{
+    IndexStats, KbFetchResult, KbSearchOptions, KbSearchResponse, KbSearchResult, SearchHit,
+};
+pub use service::{KBDownloadService, KbDoc, KbDocFile, KbDownloadResult, KbIndexerService};
 
 /// KB storage directory (matches Google's .android/cli/docs/kbzip)
 const KB_STORAGE_DIR: &str = "docs/kbzip";
@@ -64,8 +66,8 @@ impl DocsCLI {
 
     /// Get default CLI directory (.android/cli)
     fn get_cli_dir() -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
 
         Ok(home.join(".android").join("cli"))
     }
@@ -85,7 +87,9 @@ impl DocsCLI {
         // Always build index if ready file doesn't exist
         // (even if ZIP was already downloaded)
         println!("Building search index (this may take a moment)...");
-        let doc_count = self.indexer_service.build_index_from_zip(&result.zip_path)?;
+        let doc_count = self
+            .indexer_service
+            .build_index_from_zip(&result.zip_path)?;
         println!("Indexed {} documents", doc_count);
 
         // Create ready file (index_ready.json)
@@ -104,7 +108,9 @@ impl DocsCLI {
         let start = Instant::now();
 
         // Search using KB indexer with default limit (10)
-        let hits = self.indexer_service.search(query, KnowledgeBaseConstants::MAX_RESULTS_SEARCH)?;
+        let hits = self
+            .indexer_service
+            .search(query, KnowledgeBaseConstants::MAX_RESULTS_SEARCH)?;
 
         let elapsed = start.elapsed();
 
@@ -120,7 +126,9 @@ impl DocsCLI {
             .into_iter()
             .map(|hit| DocResult {
                 title: hit.title.unwrap_or_else(|| "Untitled".to_string()),
-                url: hit.url.unwrap_or_else(|| hit.filepath.clone().unwrap_or_default()),
+                url: hit
+                    .url
+                    .unwrap_or_else(|| hit.filepath.clone().unwrap_or_default()),
                 description: hit.summary,
                 score: Some(hit.score),
                 filepath: hit.filepath,
@@ -131,7 +139,11 @@ impl DocsCLI {
     }
 
     /// Search with custom options
-    pub fn search_with_options(&mut self, query: &str, options: &KbSearchOptions) -> Result<Vec<DocResult>> {
+    pub fn search_with_options(
+        &mut self,
+        query: &str,
+        options: &KbSearchOptions,
+    ) -> Result<Vec<DocResult>> {
         self.ensure_kb_ready()?;
 
         let start = Instant::now();
@@ -152,7 +164,9 @@ impl DocsCLI {
             .into_iter()
             .map(|hit| DocResult {
                 title: hit.title.unwrap_or_else(|| "Untitled".to_string()),
-                url: hit.url.unwrap_or_else(|| hit.filepath.clone().unwrap_or_default()),
+                url: hit
+                    .url
+                    .unwrap_or_else(|| hit.filepath.clone().unwrap_or_default()),
                 description: hit.summary,
                 score: Some(hit.score),
                 filepath: hit.filepath,
@@ -192,7 +206,9 @@ impl DocsCLI {
         }
 
         // Remove ready file (index_ready.json)
-        let ready_path = self.storage_dir.join(KnowledgeBaseConstants::SENTINEL_FILE_NAME);
+        let ready_path = self
+            .storage_dir
+            .join(KnowledgeBaseConstants::SENTINEL_FILE_NAME);
         if ready_path.exists() {
             fs::remove_file(&ready_path)?;
         }
@@ -215,7 +231,8 @@ impl DocsCLI {
 
         println!("Found {} result(s):\n", results.len());
         for (i, result) in results.iter().enumerate() {
-            let score_str = result.score
+            let score_str = result
+                .score
                 .map(|s| format!("[{:.2}] ", s))
                 .unwrap_or_default();
 

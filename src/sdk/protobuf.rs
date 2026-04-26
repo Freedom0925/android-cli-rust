@@ -9,14 +9,14 @@ mod proto_types {
 }
 
 // Use renamed aliases for protobuf types
-use proto_types::Revision as RevisionProto;
-use proto_types::SdkEntry as SdkEntryProto;
-use proto_types::Sdk as SdkProto;
 use proto_types::PackageList;
+use proto_types::Revision as RevisionProto;
+use proto_types::Sdk as SdkProto;
+use proto_types::SdkEntry as SdkEntryProto;
 
-pub use proto_types::{Channel, Platform, Architecture};
+pub use proto_types::{Architecture, Channel, Platform};
 
-use crate::sdk::model::{Sdk, SdkEntry, Revision};
+use crate::sdk::model::{Revision, Sdk, SdkEntry};
 use prost::Message;
 
 impl From<&Revision> for RevisionProto {
@@ -34,9 +34,21 @@ impl From<&RevisionProto> for Revision {
     fn from(proto: &RevisionProto) -> Self {
         Revision {
             major: proto.major,
-            minor: if proto.minor != 0 { Some(proto.minor) } else { None },
-            micro: if proto.micro != 0 { Some(proto.micro) } else { None },
-            preview: if proto.preview != 0 { Some(proto.preview) } else { None },
+            minor: if proto.minor != 0 {
+                Some(proto.minor)
+            } else {
+                None
+            },
+            micro: if proto.micro != 0 {
+                Some(proto.micro)
+            } else {
+                None
+            },
+            preview: if proto.preview != 0 {
+                Some(proto.preview)
+            } else {
+                None
+            },
         }
     }
 }
@@ -57,10 +69,16 @@ impl From<&SdkEntryProto> for SdkEntry {
     fn from(proto: &SdkEntryProto) -> Self {
         SdkEntry {
             path: proto.path.clone(),
-            revision: proto.revision.as_ref()
+            revision: proto
+                .revision
+                .as_ref()
                 .map(|r| Revision::from(r))
                 .unwrap_or_else(|| Revision::new(0)),
-            url: if proto.url.is_empty() { None } else { Some(proto.url.clone()) },
+            url: if proto.url.is_empty() {
+                None
+            } else {
+                Some(proto.url.clone())
+            },
             size: proto.size as u64,
             sha1: proto.sha1.clone(),
         }
@@ -114,11 +132,11 @@ pub fn package_list_from_protobuf(bytes: &[u8]) -> Result<PackageList, prost::De
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sdk::model::{Sdk, SdkEntry, Revision};
+    use crate::sdk::model::{Revision, Sdk, SdkEntry};
 
     #[test]
     fn test_revision_protobuf_roundtrip() {
-        let rev = Revision::full(34, 1, 3);  // Use non-zero values to avoid protobuf default ambiguity
+        let rev = Revision::full(34, 1, 3); // Use non-zero values to avoid protobuf default ambiguity
         let bytes = revision_to_protobuf(&rev);
         let parsed = revision_from_protobuf(&bytes).unwrap();
         assert_eq!(rev.major, parsed.major);
@@ -137,7 +155,10 @@ mod tests {
     #[test]
     fn test_sdk_protobuf_roundtrip() {
         let sdk = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::parse("34.0.0").unwrap()),
+            SdkEntry::new(
+                "build-tools".to_string(),
+                Revision::parse("34.0.0").unwrap(),
+            ),
             SdkEntry::new("platforms".to_string(), Revision::parse("34").unwrap()),
         ]);
 
@@ -169,7 +190,10 @@ mod tests {
         let bytes = sdk_to_protobuf(&Sdk::with_entries(vec![entry.clone()]));
         let parsed = sdk_from_protobuf(&bytes).unwrap();
 
-        assert_eq!(parsed.entries[0].url, Some("https://example.com/file.zip".to_string()));
+        assert_eq!(
+            parsed.entries[0].url,
+            Some("https://example.com/file.zip".to_string())
+        );
         assert_eq!(parsed.entries[0].size, 1024000);
         assert_eq!(parsed.entries[0].sha1, "abc123");
     }

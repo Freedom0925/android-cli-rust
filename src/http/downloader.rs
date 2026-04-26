@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::io::{BufReader, Read, Write};
-use std::time::Duration;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue, ETAG, IF_NONE_MATCH, CONTENT_LENGTH};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_LENGTH, ETAG, IF_NONE_MATCH};
+use std::fs;
+use std::io::{BufReader, Read, Write};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// HTTP downloader with ETag caching support
 pub struct Downloader {
@@ -38,12 +38,11 @@ impl Downloader {
 
         // Parse proxy URL
         if proxy.starts_with("http://") || proxy.starts_with("https://") {
-            builder = builder.proxy(reqwest::Proxy::all(proxy)
-                .context("Failed to configure proxy")?);
+            builder =
+                builder.proxy(reqwest::Proxy::all(proxy).context("Failed to configure proxy")?);
         }
 
-        let client = builder.build()
-            .context("Failed to create HTTP client")?;
+        let client = builder.build().context("Failed to create HTTP client")?;
 
         Ok(Self {
             client,
@@ -70,11 +69,14 @@ impl Downloader {
         // Build request with ETag header
         let mut headers = HeaderMap::new();
         if let Some(etag) = &existing_etag {
-            headers.insert(IF_NONE_MATCH, HeaderValue::from_str(etag)
-                .context("Invalid ETag header")?);
+            headers.insert(
+                IF_NONE_MATCH,
+                HeaderValue::from_str(etag).context("Invalid ETag header")?,
+            );
         }
 
-        let response = self.client
+        let response = self
+            .client
             .get(url)
             .headers(headers)
             .send()
@@ -95,13 +97,15 @@ impl Downloader {
         }
 
         // Get new ETag
-        let new_etag = response.headers()
+        let new_etag = response
+            .headers()
             .get(ETAG)
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
         // Get content length for progress bar
-        let content_length = response.headers()
+        let content_length = response
+            .headers()
             .get(CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
@@ -135,7 +139,8 @@ impl Downloader {
         let mut downloaded: u64 = 0;
 
         loop {
-            let n = reader.read(&mut buffer)
+            let n = reader
+                .read(&mut buffer)
                 .context("Failed to read response")?;
             if n == 0 {
                 break;
@@ -165,10 +170,7 @@ impl Downloader {
 
     /// Fetch URL content as bytes
     pub fn fetch_bytes(&self, url: &str) -> Result<Vec<u8>> {
-        let response = self.client
-            .get(url)
-            .send()
-            .context("Failed to fetch URL")?;
+        let response = self.client.get(url).send().context("Failed to fetch URL")?;
 
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
@@ -178,8 +180,7 @@ impl Downloader {
             ));
         }
 
-        let bytes = response.bytes()
-            .context("Failed to read response body")?;
+        let bytes = response.bytes().context("Failed to read response body")?;
 
         Ok(bytes.to_vec())
     }
@@ -187,8 +188,7 @@ impl Downloader {
     /// Fetch URL content as text
     pub fn fetch_text(&self, url: &str) -> Result<String> {
         let bytes = self.fetch_bytes(url)?;
-        String::from_utf8(bytes)
-            .context("Response is not valid UTF-8")
+        String::from_utf8(bytes).context("Response is not valid UTF-8")
     }
 }
 

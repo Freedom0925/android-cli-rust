@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::layout::{UiNode, Key};
+use crate::layout::{Key, UiNode};
 use crate::vision::Rect;
 
 /// Element serializer for JSON output
@@ -54,37 +54,39 @@ impl ElementSerializer {
 
         // Add interactions
         if !node.interactions.is_empty() {
-            let interactions: Vec<&str> = node.interactions.iter()
-                .map(|s| s.as_str())
-                .collect();
+            let interactions: Vec<&str> = node.interactions.iter().map(|s| s.as_str()).collect();
             obj.insert("interactions".to_string(), json!(interactions));
         }
 
         // Add state
         if !node.state.is_empty() {
-            let state: Vec<&str> = node.state.iter()
-                .map(|s| s.as_str())
-                .collect();
+            let state: Vec<&str> = node.state.iter().map(|s| s.as_str()).collect();
             obj.insert("state".to_string(), json!(state));
         }
 
         // Add center if bounds available
         if let Some((cx, cy)) = node.get_center() {
-            obj.insert("center".to_string(), json!({
-                "x": cx,
-                "y": cy
-            }));
+            obj.insert(
+                "center".to_string(),
+                json!({
+                    "x": cx,
+                    "y": cy
+                }),
+            );
         }
 
         // Add bounds for scrollable elements
         if node.is_scrollable() {
             if let Some((min_x, min_y, max_x, max_y)) = node.get_bounds() {
-                obj.insert("bounds".to_string(), json!({
-                    "min_x": min_x,
-                    "min_y": min_y,
-                    "max_x": max_x,
-                    "max_y": max_y
-                }));
+                obj.insert(
+                    "bounds".to_string(),
+                    json!({
+                        "min_x": min_x,
+                        "min_y": min_y,
+                        "max_x": max_x,
+                        "max_y": max_y
+                    }),
+                );
             }
         }
 
@@ -123,7 +125,8 @@ impl ElementSerializer {
 
     /// Serialize flattened map to JSON array
     pub fn serialize_flat_map(map: &HashMap<Key, UiNode>) -> Value {
-        let elements: Vec<Value> = map.iter()
+        let elements: Vec<Value> = map
+            .iter()
             .map(|(_, node)| Self::to_json_object(node))
             .collect();
         json!(elements)
@@ -186,7 +189,9 @@ impl ElementDiffSerializer {
         }
 
         // Find removed
-        let removed: Vec<Value> = self.old_map.iter()
+        let removed: Vec<Value> = self
+            .old_map
+            .iter()
             .filter(|(key, _)| !current_map.contains_key(key))
             .map(|(_, node)| ElementSerializer::to_json_object(node))
             .collect();
@@ -202,19 +207,24 @@ impl ElementDiffSerializer {
     pub fn summary(&self, current: &UiNode) -> DiffSummary {
         let current_map = UiNode::flatten(current);
 
-        let added = current_map.iter()
+        let added = current_map
+            .iter()
             .filter(|(key, _)| !self.old_map.contains_key(key))
             .count();
 
-        let modified = current_map.iter()
+        let modified = current_map
+            .iter()
             .filter(|(key, node)| {
-                self.old_map.get(key)
+                self.old_map
+                    .get(key)
                     .map(|old| !old.has_same_attributes(node))
                     .unwrap_or(false)
             })
             .count();
 
-        let removed = self.old_map.iter()
+        let removed = self
+            .old_map
+            .iter()
             .filter(|(key, _)| !current_map.contains_key(key))
             .count();
 

@@ -5,12 +5,12 @@
 //!
 //! Features parallel multi-threaded download for faster downloads.
 
-use anyhow::{Result, Context, anyhow};
-use std::path::{Path, PathBuf};
+use anyhow::{anyhow, Context, Result};
 use std::fs;
-use std::io::{self, Write, Read, Seek};
-use std::sync::{Arc, Mutex};
+use std::io::{self, Read, Seek, Write};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -88,15 +88,15 @@ impl CustomArch {
         // Order matters: longer/more specific strings first
         // to avoid substring matching issues (x86_64 vs x86)
         &[
-            CustomArch::Aarch64Be,  // aarch64_be before aarch64
+            CustomArch::Aarch64Be, // aarch64_be before aarch64
             CustomArch::Aarch64,
-            CustomArch::ArmebHf,    // armeb before armeb
+            CustomArch::ArmebHf, // armeb before armeb
             CustomArch::Armeb,
-            CustomArch::Armhf,      // armhf contains "arm" and "arm-linux-musleabihf"
-            CustomArch::Arm,        // arm-linux-musleabi
-            CustomArch::X86_64,     // x86_64 before x86
+            CustomArch::Armhf,  // armhf contains "arm" and "arm-linux-musleabihf"
+            CustomArch::Arm,    // arm-linux-musleabi
+            CustomArch::X86_64, // x86_64 before x86
             CustomArch::X86,
-            CustomArch::Riscv64,    // riscv64 before riscv32
+            CustomArch::Riscv64, // riscv64 before riscv32
             CustomArch::Riscv32,
             CustomArch::Loongarch64,
             CustomArch::Powerpc64le,
@@ -171,7 +171,8 @@ impl CustomSdkDownloader {
 
     /// Fetch available releases from GitHub
     pub fn fetch_releases(&self) -> Result<Vec<Release>> {
-        let response = self.client
+        let response = self
+            .client
             .get(GITHUB_API_URL)
             .header("Accept", "application/vnd.github.v3+json")
             .send()
@@ -181,11 +182,10 @@ impl CustomSdkDownloader {
             return Err(anyhow!("GitHub API returned status: {}", response.status()));
         }
 
-        let body = response.text()
-            .context("Failed to read response body")?;
+        let body = response.text().context("Failed to read response body")?;
 
-        let releases_json: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .context("Failed to parse releases JSON")?;
+        let releases_json: Vec<serde_json::Value> =
+            serde_json::from_str(&body).context("Failed to parse releases JSON")?;
 
         let releases = releases_json
             .into_iter()
@@ -238,7 +238,12 @@ impl CustomSdkDownloader {
     }
 
     /// Download and extract SDK with parallel download
-    pub fn download_and_extract(&self, version: &str, arch: CustomArch, sdk_path: &Path) -> Result<()> {
+    pub fn download_and_extract(
+        &self,
+        version: &str,
+        arch: CustomArch,
+        sdk_path: &Path,
+    ) -> Result<()> {
         let url = Self::get_download_url(version, arch);
 
         println!("Downloading Android SDK {} for {}...", version, arch);
@@ -246,13 +251,15 @@ impl CustomSdkDownloader {
         println!("Threads: {}", self.threads);
 
         // Create temp directory for download
-        let temp_dir = tempfile::tempdir()
-            .context("Failed to create temp directory")?;
+        let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
 
-        let archive_path = temp_dir.path().join(format!("android-sdk-{}.tar.xz", arch.as_str()));
+        let archive_path = temp_dir
+            .path()
+            .join(format!("android-sdk-{}.tar.xz", arch.as_str()));
 
         // Get file size first
-        let head_response = self.client
+        let head_response = self
+            .client
             .head(&url)
             .send()
             .context("Failed to check file size")?;
@@ -261,18 +268,27 @@ impl CustomSdkDownloader {
             return Err(anyhow!("Failed to check file: {}", head_response.status()));
         }
 
-        let total_size = head_response.content_length()
+        let total_size = head_response
+            .content_length()
             .ok_or_else(|| anyhow!("Server did not provide file size"))?;
 
         // Check if server supports range requests
-        let accepts_ranges = head_response.headers()
+        let accepts_ranges = head_response
+            .headers()
             .get("accept-ranges")
             .and_then(|v| v.to_str().ok())
             .map(|v| v == "bytes")
             .unwrap_or(false);
 
         println!("File size: {:.1} MB", total_size as f64 / 1024.0 / 1024.0);
-        println!("Range requests: {}", if accepts_ranges { "supported" } else { "not supported" });
+        println!(
+            "Range requests: {}",
+            if accepts_ranges {
+                "supported"
+            } else {
+                "not supported"
+            }
+        );
 
         // Download with parallel chunks if supported, otherwise single-thread
         if accepts_ranges && total_size >= MIN_CHUNK_SIZE && self.threads > 1 {
@@ -296,8 +312,7 @@ impl CustomSdkDownloader {
 
         // Create SDK directory if it doesn't exist
         if !sdk_path.exists() {
-            fs::create_dir_all(sdk_path)
-                .context("Failed to create SDK directory")?;
+            fs::create_dir_all(sdk_path).context("Failed to create SDK directory")?;
         }
 
         // Use tar command to extract (tar.xz format)
@@ -328,8 +343,7 @@ impl CustomSdkDownloader {
         println!("Each chunk: {:.1} MB", chunk_size as f64 / 1024.0 / 1024.0);
 
         // Create temp directory for chunk files
-        let temp_dir = tempfile::tempdir()
-            .context("Failed to create temp directory for chunks")?;
+        let temp_dir = tempfile::tempdir().context("Failed to create temp directory for chunks")?;
         let temp_dir_path = temp_dir.path().to_path_buf();
 
         // Use atomic counter for progress
@@ -377,16 +391,14 @@ impl CustomSdkDownloader {
 
         for (idx, handle) in handles.into_iter().enumerate() {
             match handle.join() {
-                Ok(result) => {
-                    match result {
-                        Ok(chunk_path) => {
-                            chunk_files.push((idx, chunk_path));
-                        }
-                        Err(e) => {
-                            errors.push((idx, e));
-                        }
+                Ok(result) => match result {
+                    Ok(chunk_path) => {
+                        chunk_files.push((idx, chunk_path));
                     }
-                }
+                    Err(e) => {
+                        errors.push((idx, e));
+                    }
+                },
                 Err(panic_payload) => {
                     // Try to extract panic message
                     let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
@@ -415,12 +427,12 @@ impl CustomSdkDownloader {
         chunk_files.sort_by_key(|(idx, _)| *idx);
 
         println!("Combining {} chunks...", chunk_files.len());
-        let mut output_file = fs::File::create(output_path)
-            .context("Failed to create output file")?;
+        let mut output_file =
+            fs::File::create(output_path).context("Failed to create output file")?;
 
         for (_idx, chunk_path) in chunk_files {
-            let mut chunk_file = fs::File::open(&chunk_path)
-                .context("Failed to open chunk file")?;
+            let mut chunk_file =
+                fs::File::open(&chunk_path).context("Failed to open chunk file")?;
             io::copy(&mut chunk_file, &mut output_file)
                 .context("Failed to copy chunk to output")?;
         }
@@ -437,18 +449,21 @@ impl CustomSdkDownloader {
     fn download_single(&self, url: &str, output_path: &Path) -> Result<()> {
         println!("Downloading with single thread...");
 
-        let mut response = self.client
+        let mut response = self
+            .client
             .get(url)
             .send()
             .context("Failed to start download")?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Download failed with status: {}", response.status()));
+            return Err(anyhow!(
+                "Download failed with status: {}",
+                response.status()
+            ));
         }
 
         let total_size = response.content_length().unwrap_or(0);
-        let mut file = fs::File::create(output_path)
-            .context("Failed to create output file")?;
+        let mut file = fs::File::create(output_path).context("Failed to create output file")?;
 
         let mut downloaded: u64 = 0;
         let mut buffer = [0u8; 8192];
@@ -463,14 +478,19 @@ impl CustomSdkDownloader {
 
             if total_size > 0 && downloaded % (1024 * 1024 * 5) == 0 {
                 let percent = (downloaded * 100 / total_size) as u32;
-                println!("  Progress: {}% ({:.1} MB / {:.1} MB)",
+                println!(
+                    "  Progress: {}% ({:.1} MB / {:.1} MB)",
                     percent,
                     downloaded as f64 / 1024.0 / 1024.0,
-                    total_size as f64 / 1024.0 / 1024.0);
+                    total_size as f64 / 1024.0 / 1024.0
+                );
             }
         }
 
-        println!("  Downloaded: {:.1} MB", downloaded as f64 / 1024.0 / 1024.0);
+        println!(
+            "  Downloaded: {:.1} MB",
+            downloaded as f64 / 1024.0 / 1024.0
+        );
 
         Ok(())
     }
@@ -487,7 +507,11 @@ impl CustomSdkDownloader {
             println!("  Available architectures:");
             for asset in release.assets {
                 if let Some(arch) = asset.arch {
-                    println!("    - {} ({:.1} MB)", arch, asset.size as f64 / 1024.0 / 1024.0);
+                    println!(
+                        "    - {} ({:.1} MB)",
+                        arch,
+                        asset.size as f64 / 1024.0 / 1024.0
+                    );
                 }
             }
             println!();
@@ -497,7 +521,12 @@ impl CustomSdkDownloader {
     }
 
     /// Install SDK with auto-detection
-    pub fn install(&self, version: Option<&str>, arch: Option<CustomArch>, sdk_path: &Path) -> Result<()> {
+    pub fn install(
+        &self,
+        version: Option<&str>,
+        arch: Option<CustomArch>,
+        sdk_path: &Path,
+    ) -> Result<()> {
         // Get releases
         let releases = self.fetch_releases()?;
 
@@ -506,30 +535,49 @@ impl CustomSdkDownloader {
         }
 
         // Select version (latest by default)
-        let selected_version = version.map(|v| v.to_string())
+        let selected_version = version
+            .map(|v| v.to_string())
             .unwrap_or_else(|| releases[0].version.clone());
 
         // Select architecture (current by default)
-        let selected_arch = arch.or_else(|| CustomArch::current())
+        let selected_arch = arch
+            .or_else(|| CustomArch::current())
             .ok_or_else(|| anyhow!("Could not detect architecture. Please specify --arch"))?;
 
         // Verify version exists
-        let release = releases.iter()
+        let release = releases
+            .iter()
             .find(|r| r.version == selected_version || r.tag_name == selected_version)
-            .ok_or_else(|| anyhow!("Version {} not found. Available: {}",
-                selected_version,
-                releases.iter().map(|r| r.version.as_str()).collect::<Vec<_>>().join(", ")))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Version {} not found. Available: {}",
+                    selected_version,
+                    releases
+                        .iter()
+                        .map(|r| r.version.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?;
 
         // Verify architecture available for this version
-        let asset = release.assets.iter()
+        let asset = release
+            .assets
+            .iter()
             .find(|a| a.arch == Some(selected_arch))
-            .ok_or_else(|| anyhow!("Architecture {} not available for version {}. Available: {}",
-                selected_arch,
-                selected_version,
-                release.assets.iter()
-                    .filter_map(|a| a.arch.map(|arch| arch.to_string()))
-                    .collect::<Vec<_>>()
-                    .join(", ")))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Architecture {} not available for version {}. Available: {}",
+                    selected_arch,
+                    selected_version,
+                    release
+                        .assets
+                        .iter()
+                        .filter_map(|a| a.arch.map(|arch| arch.to_string()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?;
 
         println!("Installing Android SDK:");
         println!("  Version: {}", selected_version);
@@ -572,13 +620,17 @@ fn download_chunk_to_temp(
         .send()
         .context("Failed to request chunk")?;
 
-    if !response.status().is_success() && response.status() != 206 { // 206 = Partial Content
-        return Err(anyhow!("Chunk {} download failed: {}", chunk_idx, response.status()));
+    if !response.status().is_success() && response.status() != 206 {
+        // 206 = Partial Content
+        return Err(anyhow!(
+            "Chunk {} download failed: {}",
+            chunk_idx,
+            response.status()
+        ));
     }
 
     // Download chunk data to temp file
-    let mut file = fs::File::create(&chunk_path)
-        .context("Failed to create chunk temp file")?;
+    let mut file = fs::File::create(&chunk_path).context("Failed to create chunk temp file")?;
 
     let mut response = response;
     let mut buffer = [0u8; 8192];
@@ -601,16 +653,22 @@ fn download_chunk_to_temp(
             if last.elapsed() >= PROGRESS_PRINT_INTERVAL {
                 let total_downloaded = downloaded_atomic.load(Ordering::Relaxed);
                 let percent = (total_downloaded * 100 / total) as u32;
-                println!("  Progress: {}% ({:.1} MB / {:.1} MB)",
+                println!(
+                    "  Progress: {}% ({:.1} MB / {:.1} MB)",
                     percent,
                     total_downloaded as f64 / 1024.0 / 1024.0,
-                    total as f64 / 1024.0 / 1024.0);
+                    total as f64 / 1024.0 / 1024.0
+                );
                 *last = Instant::now();
             }
         }
     }
 
-    println!("  Chunk {} complete: {:.1} MB", chunk_idx, chunk_downloaded as f64 / 1024.0 / 1024.0);
+    println!(
+        "  Chunk {} complete: {:.1} MB",
+        chunk_idx,
+        chunk_downloaded as f64 / 1024.0 / 1024.0
+    );
 
     Ok(chunk_path)
 }

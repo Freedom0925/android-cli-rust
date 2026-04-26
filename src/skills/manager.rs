@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Read, Write};
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 use crate::skills::location::SkillsInstallLocation;
@@ -11,7 +11,8 @@ use crate::skills::location::SkillsInstallLocation;
 const CLI_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// GitHub releases URL for downloading latest skills
-const SKILLS_DOWNLOAD_URL: &str = "https://github.com/android/skills/releases/latest/download/android-skills.zip";
+const SKILLS_DOWNLOAD_URL: &str =
+    "https://github.com/android/skills/releases/latest/download/android-skills.zip";
 
 /// Skill metadata from SKILL.md YAML frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +44,8 @@ impl Skill {
 
         // Parse YAML frontmatter
         let metadata = if content.starts_with("---") {
-            let end = content.find("\n---\n")
+            let end = content
+                .find("\n---\n")
                 .or_else(|| content.find("\n---"))
                 .unwrap_or(0);
 
@@ -53,7 +55,8 @@ impl Skill {
                     .context("Failed to parse SKILL.md frontmatter")?
             } else {
                 SkillMetadata {
-                    name: path.parent()
+                    name: path
+                        .parent()
                         .and_then(|p| p.file_name())
                         .and_then(|n| n.to_str())
                         .unwrap_or("unknown")
@@ -66,7 +69,8 @@ impl Skill {
             }
         } else {
             SkillMetadata {
-                name: path.parent()
+                name: path
+                    .parent()
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown")
@@ -117,8 +121,7 @@ pub struct SkillManager {
 
 impl SkillManager {
     pub fn new() -> Result<Self> {
-        let home = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/"));
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
         let skills_dir = home.join(".claude").join("skills");
         let user_skills_dir = home.join(".claude");
@@ -205,7 +208,8 @@ impl SkillManager {
             request = request.header(reqwest::header::IF_NONE_MATCH, etag.trim());
         }
 
-        let response = request.send()
+        let response = request
+            .send()
             .context("Failed to fetch skills from GitHub")?;
 
         // Check if unchanged (304 Not Modified)
@@ -223,13 +227,15 @@ impl SkillManager {
         }
 
         // Get new ETag
-        let new_etag = response.headers()
+        let new_etag = response
+            .headers()
             .get(reqwest::header::ETAG)
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
         // Download with progress
-        let content_length = response.headers()
+        let content_length = response
+            .headers()
             .get(reqwest::header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
@@ -242,7 +248,8 @@ impl SkillManager {
         let mut reader = response;
 
         loop {
-            let n = reader.read(&mut buffer)
+            let n = reader
+                .read(&mut buffer)
                 .context("Failed to read response")?;
             if n == 0 {
                 break;
@@ -254,7 +261,10 @@ impl SkillManager {
             // Show progress if we know the content length
             if let Some(total) = content_length {
                 let percent = (downloaded as f64 / total as f64 * 100.0) as i32;
-                print!("\rDownloading skills: {}% ({}/{} bytes)", percent, downloaded, total);
+                print!(
+                    "\rDownloading skills: {}% ({}/{} bytes)",
+                    percent, downloaded, total
+                );
             } else {
                 print!("\rDownloaded {} bytes...", downloaded);
             }
@@ -312,8 +322,7 @@ impl SkillManager {
             let zip_file = fs::File::open(&zip_path)
                 .with_context(|| format!("Failed to open zip file: {}", zip_path.display()))?;
 
-            let mut archive = ZipArchive::new(zip_file)
-                .context("Failed to read zip archive")?;
+            let mut archive = ZipArchive::new(zip_file).context("Failed to read zip archive")?;
 
             for i in 0..archive.len() {
                 let mut file = archive.by_index(i)?;
@@ -322,11 +331,16 @@ impl SkillManager {
                         let path_str = path.display().to_string();
                         let full_path = skills_dir.join(&path);
                         // Security: Verify path doesn't escape target directory (path traversal protection)
-                        let canonical_skills_dir = skills_dir.canonicalize()
+                        let canonical_skills_dir = skills_dir
+                            .canonicalize()
                             .unwrap_or_else(|_| skills_dir.clone());
                         // For paths that don't exist yet, check prefix
-                        if !full_path.starts_with(&canonical_skills_dir) &&
-                            !full_path.to_str().map(|s| s.starts_with(skills_dir.to_str().unwrap_or(""))).unwrap_or(false) {
+                        if !full_path.starts_with(&canonical_skills_dir)
+                            && !full_path
+                                .to_str()
+                                .map(|s| s.starts_with(skills_dir.to_str().unwrap_or("")))
+                                .unwrap_or(false)
+                        {
                             // Skip potentially malicious path traversal attempts
                             println!("Skipping suspicious path: {}", path_str);
                             continue;
@@ -337,19 +351,20 @@ impl SkillManager {
                 };
 
                 if file.name().ends_with('/') {
-                    fs::create_dir_all(&outpath)
-                        .with_context(|| format!("Failed to create directory: {}", outpath.display()))?;
+                    fs::create_dir_all(&outpath).with_context(|| {
+                        format!("Failed to create directory: {}", outpath.display())
+                    })?;
                 } else {
                     if let Some(p) = outpath.parent() {
                         if !p.exists() {
-                            fs::create_dir_all(p)
-                                .with_context(|| format!("Failed to create directory: {}", p.display()))?;
+                            fs::create_dir_all(p).with_context(|| {
+                                format!("Failed to create directory: {}", p.display())
+                            })?;
                         }
                     }
                     let mut outfile = fs::File::create(&outpath)
                         .with_context(|| format!("Failed to create file: {}", outpath.display()))?;
-                    io::copy(&mut file, &mut outfile)
-                        .context("Failed to extract file")?;
+                    io::copy(&mut file, &mut outfile).context("Failed to extract file")?;
                 }
             }
 
@@ -408,7 +423,12 @@ This skill helps Claude work with Android projects using the CLI.
     ///
     /// First unzips bundled skills if needed, then installs the specified skill
     /// to the user's skills directory using do_install (install_skill).
-    pub fn install_bundled(&self, skill_name: &str, agent: Option<&str>, project: Option<&PathBuf>) -> Result<()> {
+    pub fn install_bundled(
+        &self,
+        skill_name: &str,
+        agent: Option<&str>,
+        project: Option<&PathBuf>,
+    ) -> Result<()> {
         // Ensure bundled skills are extracted
         let bundled_dir = self.unzip_bundled_skills()?;
 
@@ -545,7 +565,13 @@ This skill helps Claude work with Android projects using the CLI.
     }
 
     /// Add/install skill
-    pub fn add(&self, skill_name: Option<&str>, all: bool, agent: Option<&str>, project: Option<&PathBuf>) -> Result<()> {
+    pub fn add(
+        &self,
+        skill_name: Option<&str>,
+        all: bool,
+        agent: Option<&str>,
+        project: Option<&PathBuf>,
+    ) -> Result<()> {
         let target_dir = if let Some(proj) = project {
             proj.join(".claude")
         } else {
@@ -564,7 +590,8 @@ This skill helps Claude work with Android projects using the CLI.
             println!("Installed {} skills", count);
         } else if let Some(name) = skill_name {
             // Install specific skill
-            let skill = self.find_available(name)?
+            let skill = self
+                .find_available(name)?
                 .ok_or_else(|| anyhow::anyhow!("Skill '{}' not found", name))?;
             self.install_skill(&skill, &target_dir, agent)?;
         } else {
@@ -635,7 +662,12 @@ This skill helps Claude work with Android projects using the CLI.
     }
 
     /// Remove skill
-    pub fn remove(&self, skill_name: &str, agent: Option<&str>, project: Option<&PathBuf>) -> Result<()> {
+    pub fn remove(
+        &self,
+        skill_name: &str,
+        agent: Option<&str>,
+        project: Option<&PathBuf>,
+    ) -> Result<()> {
         // Parse agent string if provided
         let agents = if let Some(agent_str) = agent {
             SkillsInstallLocation::parse_agents(Some(agent_str))
@@ -676,9 +708,17 @@ This skill helps Claude work with Android projects using the CLI.
 
             if skill_dir.exists() {
                 fs::remove_dir_all(&skill_dir)?;
-                println!("Removed skill '{}' from {}", skill_name, location.agent_name());
+                println!(
+                    "Removed skill '{}' from {}",
+                    skill_name,
+                    location.agent_name()
+                );
             } else {
-                println!("Skill '{}' not installed in {}", skill_name, location.agent_name());
+                println!(
+                    "Skill '{}' not installed in {}",
+                    skill_name,
+                    location.agent_name()
+                );
             }
         }
 
@@ -694,9 +734,14 @@ This skill helps Claude work with Android projects using the CLI.
 
         // Search in available skills
         for skill in available.iter().chain(installed.iter()) {
-            if skill.name.contains(keyword) ||
-               skill.description.contains(keyword) ||
-               skill.content.as_ref().map(|c| c.contains(keyword)).unwrap_or(false) {
+            if skill.name.contains(keyword)
+                || skill.description.contains(keyword)
+                || skill
+                    .content
+                    .as_ref()
+                    .map(|c| c.contains(keyword))
+                    .unwrap_or(false)
+            {
                 results.push(skill.clone());
             }
         }

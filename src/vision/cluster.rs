@@ -2,8 +2,8 @@
 //!
 //! Based on original PixelCluster.java from Kotlin implementation
 
-use crate::vision::{Rect, Region, Point};
-use image::{DynamicImage, GenericImageView, Rgb, ImageBuffer, Luma};
+use crate::vision::{Point, Rect, Region};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb};
 use std::collections::{HashMap, HashSet};
 
 /// A cluster of similar pixels
@@ -197,7 +197,10 @@ pub fn find_connected_clusters(img: &ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<Pixe
                 clusters.insert(root, PixelCluster::empty());
             }
 
-            clusters.get_mut(&root).unwrap().add_pixel(x as i32, y as i32);
+            clusters
+                .get_mut(&root)
+                .unwrap()
+                .add_pixel(x as i32, y as i32);
         }
     }
 
@@ -282,7 +285,8 @@ impl ClusterDetector {
 
                 // Quantize color to reduce buckets
                 let quantized = self.quantize_color(rgb);
-                color_buckets.entry(quantized)
+                color_buckets
+                    .entry(quantized)
                     .or_insert_with(HashSet::new)
                     .insert(Point::new(x as i32, y as i32));
             }
@@ -293,9 +297,7 @@ impl ClusterDetector {
             .into_iter()
             .filter(|(_, pixels)| pixels.len() >= self.min_cluster_size)
             .filter(|(_, pixels)| pixels.len() <= self.max_cluster_size)
-            .map(|(color, pixels)| {
-                PixelCluster::new(pixels, Rgb(color))
-            })
+            .map(|(color, pixels)| PixelCluster::new(pixels, Rgb(color)))
             .collect();
 
         // Merge adjacent clusters with similar colors
@@ -322,7 +324,8 @@ impl ClusterDetector {
                 let pixel = img.get_pixel(x, y);
                 let rgb = [pixel[0], pixel[1], pixel[2]];
                 let quantized = self.quantize_color(rgb);
-                color_buckets.entry(quantized)
+                color_buckets
+                    .entry(quantized)
                     .or_insert_with(HashSet::new)
                     .insert(Point::new(x as i32, y as i32));
             }
@@ -339,13 +342,20 @@ impl ClusterDetector {
     }
 
     /// Find clusters of a specific color
-    pub fn find_clusters_by_color(&self, img: &DynamicImage, target_color: Rgb<u8>) -> Vec<PixelCluster> {
+    pub fn find_clusters_by_color(
+        &self,
+        img: &DynamicImage,
+        target_color: Rgb<u8>,
+    ) -> Vec<PixelCluster> {
         let clusters = self.detect_clusters(img);
         clusters
             .into_iter()
             .filter(|cluster| {
                 let color = cluster.get_color();
-                self.colors_are_similar([color[0], color[1], color[2]], [target_color[0], target_color[1], target_color[2]])
+                self.colors_are_similar(
+                    [color[0], color[1], color[2]],
+                    [target_color[0], target_color[1], target_color[2]],
+                )
             })
             .collect()
     }
@@ -366,9 +376,9 @@ impl ClusterDetector {
         let diff_g = (c1[1] as i32 - c2[1] as i32).abs() as u8;
         let diff_b = (c1[2] as i32 - c2[2] as i32).abs() as u8;
 
-        diff_r <= self.color_threshold &&
-        diff_g <= self.color_threshold &&
-        diff_b <= self.color_threshold
+        diff_r <= self.color_threshold
+            && diff_g <= self.color_threshold
+            && diff_b <= self.color_threshold
     }
 
     /// Merge adjacent clusters
@@ -396,11 +406,16 @@ impl ClusterDetector {
                     continue;
                 }
 
-                if self.clusters_are_adjacent(&clusters[i], &clusters[j]) &&
-                   self.colors_are_similar(
-                       [merged_color[0], merged_color[1], merged_color[2]],
-                       [clusters[j].color[0], clusters[j].color[1], clusters[j].color[2]]
-                   ) {
+                if self.clusters_are_adjacent(&clusters[i], &clusters[j])
+                    && self.colors_are_similar(
+                        [merged_color[0], merged_color[1], merged_color[2]],
+                        [
+                            clusters[j].color[0],
+                            clusters[j].color[1],
+                            clusters[j].color[2],
+                        ],
+                    )
+                {
                     visited.insert(j);
                     for p in clusters[j].pixels.iter() {
                         merged_pixels.insert(*p);
@@ -423,7 +438,8 @@ impl ClusterDetector {
         // Check if any pixel from c1 is within distance threshold of c2
         let threshold = 3; // pixels
 
-        for p1 in c1.pixels.iter().take(50) { // Sample first 50 pixels for efficiency
+        for p1 in c1.pixels.iter().take(50) {
+            // Sample first 50 pixels for efficiency
             for p2 in c2.pixels.iter().take(50) {
                 let dx = (p1.x - p2.x).abs();
                 let dy = (p1.y - p2.y).abs();

@@ -1,10 +1,10 @@
-use std::path::Path;
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
-use std::collections::HashMap;
-use anyhow::{Result, Context, bail};
+use std::path::Path;
 use zip::ZipArchive;
-use serde::{Deserialize, Serialize};
 
 /// Embedded templates.zip from Google Android CLI
 const TEMPLATE_ZIP: &[u8] = include_bytes!("templates/templates.zip");
@@ -121,7 +121,7 @@ impl TemplateEngineRunner {
         // Find all template directories (look for template-definition.json)
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
-            let path = file.name().to_string();  // Clone to avoid borrow issues
+            let path = file.name().to_string(); // Clone to avoid borrow issues
 
             if path.contains("template-definition.json") {
                 let mut content = Vec::new();
@@ -152,15 +152,17 @@ impl TemplateEngineRunner {
         let mut runner = Self::new();
         let list = runner.load_template_list()?;
 
-        let templates: Vec<TemplateInfo> = list.templates.iter().map(|t| {
-            TemplateInfo {
+        let templates: Vec<TemplateInfo> = list
+            .templates
+            .iter()
+            .map(|t| TemplateInfo {
                 name: t.name.clone(),
                 short_name: t.short_name.clone(),
                 description: t.name.clone(),
                 tags: t.tags.clone(),
                 is_default: t.short_name == "empty-activity",
-            }
-        }).collect();
+            })
+            .collect();
 
         Ok(templates)
     }
@@ -170,8 +172,13 @@ impl TemplateEngineRunner {
         let templates = self.list_templates()?;
         println!("Template name                 Template description    Tags");
         for template in &templates {
-            let default_marker = if template.is_default { " (default)" } else { "" };
-            println!("{}{}    {}    {}",
+            let default_marker = if template.is_default {
+                " (default)"
+            } else {
+                ""
+            };
+            println!(
+                "{}{}    {}    {}",
                 template.short_name,
                 default_marker,
                 template.name,
@@ -214,7 +221,8 @@ impl TemplateEngineRunner {
         for arg in &template.arguments {
             let value = match arg.id.as_str() {
                 "name" => project_name.to_string(),
-                "minSdk" => min_sdk.map(|s| s.to_string())
+                "minSdk" => min_sdk
+                    .map(|s| s.to_string())
                     .unwrap_or_else(|| evaluate_template_expr(&arg.default_value, &args)),
                 _ => evaluate_template_expr(&arg.default_value, &args),
             };
@@ -228,7 +236,10 @@ impl TemplateEngineRunner {
             args.insert("sdkPath".to_string(), sdk_path);
         }
 
-        let compile_sdk = args.get("compileSdk").cloned().unwrap_or_else(|| "36".to_string());
+        let compile_sdk = args
+            .get("compileSdk")
+            .cloned()
+            .unwrap_or_else(|| "36".to_string());
         args.insert("compileSdk".to_string(), compile_sdk);
 
         if verbose {
@@ -243,27 +254,40 @@ impl TemplateEngineRunner {
         }
 
         // Create project directory
-        let project_dir = output_dir.join(sanitize_project_name(&args.get("name").unwrap_or(&"app".to_string())));
+        let project_dir = output_dir.join(sanitize_project_name(
+            &args.get("name").unwrap_or(&"app".to_string()),
+        ));
         if project_dir.exists() {
             bail!(
                 "Directory '{}' already exists. Please choose a different name or output directory.",
                 project_dir.display()
             );
         }
-        fs::create_dir_all(&project_dir)
-            .with_context(|| format!("Failed to create project directory: {}", project_dir.display()))?;
+        fs::create_dir_all(&project_dir).with_context(|| {
+            format!(
+                "Failed to create project directory: {}",
+                project_dir.display()
+            )
+        })?;
 
         // Get cached template prefix
-        let template_prefix = self.template_prefixes.get(template_short_name)
+        let template_prefix = self
+            .template_prefixes
+            .get(template_short_name)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Template prefix not found for '{}'", template_short_name))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Template prefix not found for '{}'", template_short_name)
+            })?;
 
         // Process template
         self.process_template(&template, &template_prefix, &args, &project_dir, verbose)?;
 
         if verbose {
-            println!("INFO: Successfully created project '{}' at '{}'",
-                template.name, project_dir.display());
+            println!(
+                "INFO: Successfully created project '{}' at '{}'",
+                template.name,
+                project_dir.display()
+            );
         } else {
             println!("Created project: {}", project_dir.display());
         }
@@ -274,7 +298,9 @@ impl TemplateEngineRunner {
     /// Find template by short name and clone it
     fn find_template(&mut self, short_name: &str) -> Result<Option<TemplateDefinition>> {
         let list = self.load_template_list()?;
-        let template = list.templates.iter()
+        let template = list
+            .templates
+            .iter()
             .find(|t| t.short_name == short_name)
             .cloned();
         Ok(template)
@@ -295,7 +321,7 @@ impl TemplateEngineRunner {
         // Copy all files from template
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
-            let path = file.name().to_string();  // Clone path to avoid borrow issues
+            let path = file.name().to_string(); // Clone path to avoid borrow issues
 
             // Skip template-definition.json and directories
             if path.ends_with("template-definition.json") || path.ends_with('/') {
@@ -308,7 +334,10 @@ impl TemplateEngineRunner {
             }
 
             // Extract relative path (remove template prefix)
-            let relative_path = path.strip_prefix(&template_prefix).unwrap_or(&path).to_string();
+            let relative_path = path
+                .strip_prefix(&template_prefix)
+                .unwrap_or(&path)
+                .to_string();
 
             // Determine target path
             let mut target_path = project_dir.join(&relative_path);
@@ -323,7 +352,10 @@ impl TemplateEngineRunner {
             } else {
                 // Binary file, no transformations
                 if verbose {
-                    println!("VERBOSE: Template file '{}': Copying contents unchanged", relative_path);
+                    println!(
+                        "VERBOSE: Template file '{}': Copying contents unchanged",
+                        relative_path
+                    );
                 }
                 fs::create_dir_all(target_path.parent().unwrap())?;
                 fs::write(&target_path, &content)?;
@@ -335,12 +367,14 @@ impl TemplateEngineRunner {
                 match transform {
                     TemplateTransformation::StringReplace { string_replace } => {
                         // Check both original and renamed path
-                        let check_path = target_path.strip_prefix(project_dir)
+                        let check_path = target_path
+                            .strip_prefix(project_dir)
                             .map(|p| p.to_string_lossy().into_owned())
                             .unwrap_or_else(|_| relative_path.clone());
 
-                        if matches_glob(&string_replace.selector.glob, &check_path) ||
-                           matches_glob(&string_replace.selector.glob, &relative_path) {
+                        if matches_glob(&string_replace.selector.glob, &check_path)
+                            || matches_glob(&string_replace.selector.glob, &relative_path)
+                        {
                             let from = evaluate_template_expr(&string_replace.from, args);
                             let to = evaluate_template_expr(&string_replace.to, args);
                             content_str = content_str.replace(&from, &to);
@@ -353,7 +387,8 @@ impl TemplateEngineRunner {
 
                             // Check if path contains source (for directory renaming like com/example/myapplication)
                             // or filename matches source (for exact file renaming like local.properties.template)
-                            let filename = relative_path.rsplit('/').next().unwrap_or(&relative_path);
+                            let filename =
+                                relative_path.rsplit('/').next().unwrap_or(&relative_path);
                             if relative_path.contains(&source) || filename == source {
                                 let new_relative = relative_path.replace(&source, &target);
                                 target_path = project_dir.join(new_relative);
@@ -365,10 +400,16 @@ impl TemplateEngineRunner {
 
             // Write file
             if verbose {
-                println!("VERBOSE: Template file '{}': Renaming file to '{}'",
-                    relative_path, target_path.file_name().unwrap().to_string_lossy());
-                println!("VERBOSE: Saving destination file '{}' ({} byte(s))",
-                    target_path.display(), content_str.len());
+                println!(
+                    "VERBOSE: Template file '{}': Renaming file to '{}'",
+                    relative_path,
+                    target_path.file_name().unwrap().to_string_lossy()
+                );
+                println!(
+                    "VERBOSE: Saving destination file '{}' ({} byte(s))",
+                    target_path.display(),
+                    content_str.len()
+                );
             }
 
             fs::create_dir_all(target_path.parent().unwrap())?;
@@ -387,9 +428,22 @@ impl Default for TemplateEngineRunner {
 
 /// Check if file is text file (needs transformation)
 fn is_text_file(path: &str) -> bool {
-    let text_extensions = [".kt", ".kts", ".java", ".xml", ".json", ".toml",
-                           ".properties", ".properties.template", ".txt", ".gradle",
-                           ".md", ".gitignore", ".sh", ".bat"];
+    let text_extensions = [
+        ".kt",
+        ".kts",
+        ".java",
+        ".xml",
+        ".json",
+        ".toml",
+        ".properties",
+        ".properties.template",
+        ".txt",
+        ".gradle",
+        ".md",
+        ".gitignore",
+        ".sh",
+        ".bat",
+    ];
     text_extensions.iter().any(|ext| path.ends_with(ext))
 }
 
@@ -422,7 +476,10 @@ fn matches_glob(glob: &str, path: &str) -> bool {
     if normalized_glob.starts_with("*.") {
         let ext = normalized_glob.strip_prefix("*").unwrap();
         // Extract filename from path and check extension
-        let filename = normalized_path.rsplit('/').next().unwrap_or(normalized_path);
+        let filename = normalized_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(normalized_path);
         return filename.ends_with(ext);
     }
 
@@ -449,14 +506,22 @@ fn evaluate_template_expr(expr: &str, args: &HashMap<String, String>) -> String 
     // ${name.toAndroidPackageSegment()}
     if result.contains("${name.toAndroidPackageSegment()") {
         let name = args.get("name").cloned().unwrap_or_default();
-        let sanitized = name.replace(' ', "").replace('-', "").replace('_', "").to_lowercase();
+        let sanitized = name
+            .replace(' ', "")
+            .replace('-', "")
+            .replace('_', "")
+            .to_lowercase();
         result = result.replace("${name.toAndroidPackageSegment()}", &sanitized);
     }
 
     // ${name.toJavaPackageSegment()}
     if result.contains("${name.toJavaPackageSegment()") {
         let name = args.get("name").cloned().unwrap_or_default();
-        let sanitized = name.replace(' ', "").replace('-', "").replace('_', "").to_lowercase();
+        let sanitized = name
+            .replace(' ', "")
+            .replace('-', "")
+            .replace('_', "")
+            .to_lowercase();
         result = result.replace("${name.toJavaPackageSegment()}", &sanitized);
     }
 
@@ -471,9 +536,7 @@ fn evaluate_template_expr(expr: &str, args: &HashMap<String, String>) -> String 
 
 /// Sanitize project name for directory
 fn sanitize_project_name(name: &str) -> String {
-    name.replace(' ', "_")
-        .replace('-', "_")
-        .to_lowercase()
+    name.replace(' ', "_").replace('-', "_").to_lowercase()
 }
 
 #[cfg(test)]
@@ -503,12 +566,17 @@ mod tests {
         let mut runner = TemplateEngineRunner::new();
         let dir = tempdir().unwrap();
 
-        runner.create_project("empty-activity", "TestApp", dir.path(), None, false).unwrap();
+        runner
+            .create_project("empty-activity", "TestApp", dir.path(), None, false)
+            .unwrap();
 
         assert!(dir.path().join("testapp").exists());
         assert!(dir.path().join("testapp/build.gradle.kts").exists());
         assert!(dir.path().join("testapp/app/build.gradle.kts").exists());
-        assert!(dir.path().join("testapp/gradle/libs.versions.toml").exists());
+        assert!(dir
+            .path()
+            .join("testapp/gradle/libs.versions.toml")
+            .exists());
     }
 
     #[test]
@@ -517,7 +585,9 @@ mod tests {
         let dir = tempdir().unwrap();
 
         // Empty template name should use default
-        runner.create_project("", "TestApp", dir.path(), None, false).unwrap();
+        runner
+            .create_project("", "TestApp", dir.path(), None, false)
+            .unwrap();
 
         assert!(dir.path().join("testapp").exists());
     }
@@ -536,7 +606,9 @@ mod tests {
         let mut runner = TemplateEngineRunner::new();
         let dir = tempdir().unwrap();
 
-        runner.create_project("empty-activity", "TestApp", dir.path(), None, false).unwrap();
+        runner
+            .create_project("empty-activity", "TestApp", dir.path(), None, false)
+            .unwrap();
 
         let project_dir = dir.path().join("testapp");
 
@@ -549,7 +621,9 @@ mod tests {
 
         // Check app module
         assert!(project_dir.join("app/build.gradle.kts").exists());
-        assert!(project_dir.join("app/src/main/AndroidManifest.xml").exists());
+        assert!(project_dir
+            .join("app/src/main/AndroidManifest.xml")
+            .exists());
 
         // Check Kotlin sources (path should be transformed based on namespace)
         let src_dir = project_dir.join("app/src/main/java/com/example/testapp");
@@ -564,11 +638,17 @@ mod tests {
         assert!(src_dir.join("ui/main/MainScreenViewModel.kt").exists());
 
         // Check test files
-        assert!(project_dir.join("app/src/test/java/com/example/testapp/ui/main/MainScreenViewModelTest.kt").exists());
-        assert!(project_dir.join("app/src/androidTest/java/com/example/testapp/ui/main/MainScreenTest.kt").exists());
+        assert!(project_dir
+            .join("app/src/test/java/com/example/testapp/ui/main/MainScreenViewModelTest.kt")
+            .exists());
+        assert!(project_dir
+            .join("app/src/androidTest/java/com/example/testapp/ui/main/MainScreenTest.kt")
+            .exists());
 
         // Check resources
-        assert!(project_dir.join("app/src/main/res/values/strings.xml").exists());
+        assert!(project_dir
+            .join("app/src/main/res/values/strings.xml")
+            .exists());
     }
 
     #[test]
@@ -576,14 +656,21 @@ mod tests {
         let mut runner = TemplateEngineRunner::new();
         let dir = tempdir().unwrap();
 
-        runner.create_project("empty-activity", "My Cool App", dir.path(), None, false).unwrap();
+        runner
+            .create_project("empty-activity", "My Cool App", dir.path(), None, false)
+            .unwrap();
 
         // Check strings.xml has correct app name
-        let strings = std::fs::read_to_string(dir.path().join("my_cool_app/app/src/main/res/values/strings.xml")).unwrap();
+        let strings = std::fs::read_to_string(
+            dir.path()
+                .join("my_cool_app/app/src/main/res/values/strings.xml"),
+        )
+        .unwrap();
         assert!(strings.contains("My Cool App"));
 
         // Check settings.gradle.kts has correct project name
-        let settings = std::fs::read_to_string(dir.path().join("my_cool_app/settings.gradle.kts")).unwrap();
+        let settings =
+            std::fs::read_to_string(dir.path().join("my_cool_app/settings.gradle.kts")).unwrap();
         assert!(settings.contains("My Cool App"));
     }
 
@@ -592,10 +679,13 @@ mod tests {
         let mut runner = TemplateEngineRunner::new();
         let dir = tempdir().unwrap();
 
-        runner.create_project("empty-activity", "TestApp", dir.path(), None, false).unwrap();
+        runner
+            .create_project("empty-activity", "TestApp", dir.path(), None, false)
+            .unwrap();
 
         // Check build.gradle.kts has correct namespace
-        let build_gradle = std::fs::read_to_string(dir.path().join("testapp/app/build.gradle.kts")).unwrap();
+        let build_gradle =
+            std::fs::read_to_string(dir.path().join("testapp/app/build.gradle.kts")).unwrap();
         assert!(build_gradle.contains("namespace = \"com.example.testapp\""));
         assert!(build_gradle.contains("applicationId = \"com.example.testapp\""));
     }
@@ -605,9 +695,12 @@ mod tests {
         let mut runner = TemplateEngineRunner::new();
         let dir = tempdir().unwrap();
 
-        runner.create_project("empty-activity", "TestApp", dir.path(), Some("26"), false).unwrap();
+        runner
+            .create_project("empty-activity", "TestApp", dir.path(), Some("26"), false)
+            .unwrap();
 
-        let build_gradle = std::fs::read_to_string(dir.path().join("testapp/app/build.gradle.kts")).unwrap();
+        let build_gradle =
+            std::fs::read_to_string(dir.path().join("testapp/app/build.gradle.kts")).unwrap();
         assert!(build_gradle.contains("minSdk = 26"));
     }
 
@@ -629,6 +722,9 @@ mod tests {
         assert_eq!(evaluate_template_expr("${name}", &args), "Test App");
 
         // Method replacement
-        assert_eq!(evaluate_template_expr("${namespace.replace('.','/')}", &args), "com/example/testapp");
+        assert_eq!(
+            evaluate_template_expr("${namespace.replace('.','/')}", &args),
+            "com/example/testapp"
+        );
     }
 }

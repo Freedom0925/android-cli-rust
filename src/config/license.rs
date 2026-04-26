@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::collections::HashSet;
 use anyhow::Result;
+use std::collections::HashSet;
+use std::fs;
 use std::io;
+use std::path::{Path, PathBuf};
 
 /// License manager for SDK package installation
 pub struct LicenseManager {
@@ -40,10 +40,15 @@ impl LicenseManager {
             let entry = entry?;
             let file_path = entry.path();
 
-            if file_path.extension().map(|e| e == "license").unwrap_or(false) {
+            if file_path
+                .extension()
+                .map(|e| e == "license")
+                .unwrap_or(false)
+            {
                 // Read license hash from file
                 if let Ok(content) = fs::read_to_string(&file_path) {
-                    let id = file_path.file_name()
+                    let id = file_path
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .map(|n| n.replace(".license", ""))
                         .unwrap_or_default();
@@ -106,7 +111,8 @@ impl LicenseManager {
 
     /// Prompt to accept all unaccepted licenses
     pub fn prompt_all(&mut self, licenses: &[(String, String)]) -> Result<()> {
-        let unaccepted: Vec<_> = licenses.iter()
+        let unaccepted: Vec<_> = licenses
+            .iter()
             .filter(|(id, _)| !self.is_accepted(id))
             .collect();
 
@@ -161,8 +167,7 @@ impl LicenseManager {
             of the applicable license agreement. Please review the license at:\n\
             https://developer.android.com/studio/terms\n\n\
             Package: {}",
-            license_name,
-            license_name
+            license_name, license_name
         ))
     }
 }
@@ -225,7 +230,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let manager = LicenseManager::new(dir.path()).unwrap();
 
-        let content = manager.fetch_license_content("android-sdk-license").unwrap();
+        let content = manager
+            .fetch_license_content("android-sdk-license")
+            .unwrap();
         assert!(content.contains("android-sdk-license"));
     }
 }

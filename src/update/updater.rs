@@ -1,10 +1,10 @@
-use anyhow::{Result, Context, bail};
-use std::path::{Path, PathBuf};
+use anyhow::{bail, Context, Result};
+use indicatif::{ProgressBar, ProgressStyle};
+use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
-use indicatif::{ProgressBar, ProgressStyle};
-use sha2::{Sha256, Digest};
+use std::path::{Path, PathBuf};
 
 /// Default release URL for updates
 const DEFAULT_RELEASE_URL: &str = "https://github.com/example/android-cli/releases/latest/download";
@@ -31,8 +31,8 @@ impl Updater {
 
     /// Validate update URL for security
     fn validate_url(url: &str) -> Result<()> {
-        let parsed = url::Url::parse(url)
-            .with_context(|| format!("Invalid URL format: {}", url))?;
+        let parsed =
+            url::Url::parse(url).with_context(|| format!("Invalid URL format: {}", url))?;
 
         // Ensure HTTPS scheme
         if parsed.scheme() != "https" {
@@ -40,13 +40,18 @@ impl Updater {
         }
 
         // Check allowed domains
-        let host = parsed.host_str()
+        let host = parsed
+            .host_str()
             .ok_or_else(|| anyhow::anyhow!("URL has no host: {}", url))?;
 
-        let allowed_domains = ["github.com", "githubusercontent.com", "releases.githubusercontent.com"];
-        let is_allowed = allowed_domains.iter().any(|domain| {
-            host == *domain || host.ends_with(&format!(".{}", domain))
-        });
+        let allowed_domains = [
+            "github.com",
+            "githubusercontent.com",
+            "releases.githubusercontent.com",
+        ];
+        let is_allowed = allowed_domains
+            .iter()
+            .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)));
 
         if !is_allowed {
             bail!("Update URL must be from GitHub domain: {}", url);
@@ -57,8 +62,7 @@ impl Updater {
 
     /// Get the current binary path
     fn current_binary_path() -> Result<PathBuf> {
-        env::current_exe()
-            .context("Failed to determine current executable path")
+        env::current_exe().context("Failed to determine current executable path")
     }
 
     /// Get the platform-specific binary name
@@ -116,13 +120,15 @@ impl Updater {
         }
 
         // Get expected SHA256 from header if available
-        let expected_sha256 = response.headers()
+        let expected_sha256 = response
+            .headers()
             .get("x-sha256")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
         // Get content length for progress bar
-        let content_length = response.headers()
+        let content_length = response
+            .headers()
             .get(reqwest::header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
@@ -141,8 +147,8 @@ impl Updater {
         );
 
         // Download to temp file first, computing SHA256 while downloading
-        let mut temp_file = tempfile::NamedTempFile::new()
-            .context("Failed to create temporary file")?;
+        let mut temp_file =
+            tempfile::NamedTempFile::new().context("Failed to create temporary file")?;
 
         let mut reader = io::BufReader::new(response);
         let mut buffer = [0u8; 8192];
@@ -150,13 +156,15 @@ impl Updater {
         let mut hasher = Sha256::new();
 
         loop {
-            let n = reader.read(&mut buffer)
+            let n = reader
+                .read(&mut buffer)
                 .context("Failed to read response")?;
             if n == 0 {
                 break;
             }
             hasher.update(&buffer[..n]);
-            temp_file.write_all(&buffer[..n])
+            temp_file
+                .write_all(&buffer[..n])
                 .context("Failed to write to temporary file")?;
             downloaded += n as u64;
             pb.set_position(downloaded);
@@ -188,7 +196,8 @@ impl Updater {
         }
 
         // Move temp file to destination
-        temp_file.persist(dest)
+        temp_file
+            .persist(dest)
             .context("Failed to save downloaded file")?;
 
         Ok(())
@@ -198,26 +207,22 @@ impl Updater {
     fn replace_binary(current: &Path, new: &Path) -> Result<()> {
         // Create backup of current binary
         let backup = current.with_extension("backup");
-        fs::copy(current, &backup)
-            .context("Failed to backup current binary")?;
+        fs::copy(current, &backup).context("Failed to backup current binary")?;
 
         // Try to replace the binary
         // On Windows, we need to rename the old binary first
         #[cfg(windows)]
         {
             let old = current.with_extension("old");
-            fs::rename(current, &old)
-                .context("Failed to rename old binary")?;
-            fs::rename(new, current)
-                .context("Failed to move new binary into place")?;
+            fs::rename(current, &old).context("Failed to rename old binary")?;
+            fs::rename(new, current).context("Failed to move new binary into place")?;
             // Try to remove the old binary (may fail if still in use)
             let _ = fs::remove_file(&old);
         }
 
         #[cfg(not(windows))]
         {
-            fs::rename(new, current)
-                .context("Failed to replace binary")?;
+            fs::rename(new, current).context("Failed to replace binary")?;
         }
 
         // Clean up backup
@@ -228,15 +233,15 @@ impl Updater {
 
     /// Perform the self-update
     pub fn update(&self, url: Option<&str>) -> Result<()> {
-        let download_url = url.map(|s| s.to_string())
+        let download_url = url
+            .map(|s| s.to_string())
             .unwrap_or_else(|| self.get_download_url());
 
         let current_binary = Self::current_binary_path()?;
         println!("Current binary: {}", current_binary.display());
 
         // Download to temp location
-        let temp_dir = tempfile::tempdir()
-            .context("Failed to create temporary directory")?;
+        let temp_dir = tempfile::tempdir().context("Failed to create temporary directory")?;
 
         let binary_name = Self::get_binary_name();
         let new_binary = temp_dir.path().join(&binary_name);
@@ -269,8 +274,7 @@ impl Updater {
                 .send()
                 .context("Failed to fetch version info")?;
 
-            let version = response.text()
-                .context("Failed to read version")?;
+            let version = response.text().context("Failed to read version")?;
 
             Ok(Some(version.trim().to_string()))
         } else {
@@ -357,7 +361,10 @@ mod tests {
 
         // Test backup path logic
         let backup_path = binary_path.with_extension("backup");
-        assert_eq!(backup_path.file_name().unwrap(), "android-darwin-amd64.backup");
+        assert_eq!(
+            backup_path.file_name().unwrap(),
+            "android-darwin-amd64.backup"
+        );
 
         // Test that we can create the backup
         fs::copy(&binary_path, &backup_path).expect("Failed to create backup");
@@ -441,7 +448,10 @@ mod tests {
         // Binary name should follow the pattern: android-{os}-{arch}[.exe]
         let parts: Vec<&str> = binary_name.split('-').collect();
         assert!(parts.len() >= 3, "Binary name should have at least 3 parts");
-        assert_eq!(parts[0], "android", "Binary name should start with 'android'");
+        assert_eq!(
+            parts[0], "android",
+            "Binary name should start with 'android'"
+        );
 
         // Second part should be the OS
         let os_part = parts[1];

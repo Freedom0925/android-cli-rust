@@ -1,9 +1,9 @@
-use anyhow::{Result, Context, bail};
-use std::path::{Path, PathBuf};
+use anyhow::{bail, Context, Result};
+use indicatif::{ProgressBar, ProgressStyle};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
-use sha2::{Sha256, Digest};
-use indicatif::{ProgressBar, ProgressStyle};
+use std::path::{Path, PathBuf};
 
 use super::kb_doc::KbDownloadResult;
 
@@ -149,10 +149,13 @@ impl KBDownloadService {
         let check_result: Result<bool, anyhow::Error> = (|| {
             let last_check_str = fs::read_to_string(&self.timestamp_file)?;
             let last_check_millis: u64 = last_check_str.trim().parse()?;
-            let update_interval_millis = KnowledgeBaseConstants::UPDATE_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
+            let update_interval_millis =
+                KnowledgeBaseConstants::UPDATE_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
             Ok(std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
-                .as_millis() as u64 - last_check_millis > update_interval_millis)
+                .as_millis() as u64
+                - last_check_millis
+                > update_interval_millis)
         })();
 
         match check_result {
@@ -174,7 +177,8 @@ impl KBDownloadService {
     /// Check for update using HEAD request and ETag
     /// Matches Google's checkForUpdate implementation
     fn check_for_update(&self) -> Result<()> {
-        let response = self.client
+        let response = self
+            .client
             .head(KnowledgeBaseConstants::KB_ZIP_URL)
             .send()
             .context("Failed to check for KB updates")?;
@@ -184,7 +188,8 @@ impl KBDownloadService {
             return Ok(());
         }
 
-        let remote_etag = response.headers()
+        let remote_etag = response
+            .headers()
             .get("ETag")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
@@ -212,10 +217,8 @@ impl KBDownloadService {
         self.download_zip_to(&temp_zip, &temp_etag)?;
 
         // Atomically move to final location
-        fs::rename(&temp_zip, &self.zip_file)
-            .context("Failed to move updated ZIP")?;
-        fs::rename(&temp_etag, &self.etag_file)
-            .context("Failed to move updated ETag")?;
+        fs::rename(&temp_zip, &self.zip_file).context("Failed to move updated ZIP")?;
+        fs::rename(&temp_etag, &self.etag_file).context("Failed to move updated ETag")?;
 
         println!("Knowledge Base zip updated successfully.");
         self.update_timestamp()?;
@@ -232,18 +235,21 @@ impl KBDownloadService {
     /// Download KB ZIP to specified paths
     fn download_zip_to(&self, target_zip: &Path, target_etag: &Path) -> Result<()> {
         // Get ETag via HEAD request
-        let head_response = self.client
+        let head_response = self
+            .client
             .head(KnowledgeBaseConstants::KB_ZIP_URL)
             .send()
             .context("Failed to get KB metadata")?;
 
-        let remote_etag = head_response.headers()
+        let remote_etag = head_response
+            .headers()
             .get("ETag")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
         // Download with progress
-        let response = self.client
+        let response = self
+            .client
             .get(KnowledgeBaseConstants::KB_ZIP_URL)
             .send()
             .context("Failed to start KB download")?;
@@ -252,7 +258,8 @@ impl KBDownloadService {
             bail!("KB download failed: HTTP {}", response.status());
         }
 
-        let content_length = response.headers()
+        let content_length = response
+            .headers()
             .get(reqwest::header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
@@ -271,20 +278,21 @@ impl KBDownloadService {
         );
 
         // Download to file
-        let mut temp_file = fs::File::create(target_zip)
-            .context("Failed to create ZIP file")?;
+        let mut temp_file = fs::File::create(target_zip).context("Failed to create ZIP file")?;
 
         let mut reader = std::io::BufReader::new(response);
         let mut buffer = [0u8; 8192];
         let mut downloaded: u64 = 0;
 
         loop {
-            let n = reader.read(&mut buffer)
+            let n = reader
+                .read(&mut buffer)
                 .context("Failed to read response")?;
             if n == 0 {
                 break;
             }
-            temp_file.write_all(&buffer[..n])
+            temp_file
+                .write_all(&buffer[..n])
                 .context("Failed to write to file")?;
             downloaded += n as u64;
             pb.set_position(downloaded);
@@ -294,8 +302,7 @@ impl KBDownloadService {
 
         // Save ETag
         if let Some(etag) = remote_etag {
-            fs::write(target_etag, etag)
-                .context("Failed to write ETag file")?;
+            fs::write(target_etag, etag).context("Failed to write ETag file")?;
         }
 
         println!("KB downloaded to: {}", target_zip.display());
@@ -312,8 +319,7 @@ impl KBDownloadService {
         let mut buffer = [0u8; 8192];
 
         loop {
-            let n = file.read(&mut buffer)
-                .context("Failed to read file")?;
+            let n = file.read(&mut buffer).context("Failed to read file")?;
             if n == 0 {
                 break;
             }
@@ -325,30 +331,36 @@ impl KBDownloadService {
 
     /// Create ready file (index_ready.json) to signal index completion
     pub fn create_ready_file(&self, sha256: &str) -> Result<()> {
-        let ready_path = self.storage_dir.join(KnowledgeBaseConstants::SENTINEL_FILE_NAME);
-        fs::write(&ready_path, sha256)
-            .context("Failed to write ready file")?;
+        let ready_path = self
+            .storage_dir
+            .join(KnowledgeBaseConstants::SENTINEL_FILE_NAME);
+        fs::write(&ready_path, sha256).context("Failed to write ready file")?;
         Ok(())
     }
 
     /// Check if ready file exists
     pub fn is_ready(&self) -> Result<bool> {
-        Ok(self.storage_dir.join(KnowledgeBaseConstants::SENTINEL_FILE_NAME).exists())
+        Ok(self
+            .storage_dir
+            .join(KnowledgeBaseConstants::SENTINEL_FILE_NAME)
+            .exists())
     }
 
     /// Wait for ready file with timeout
     pub fn wait_for_ready(&self, timeout_ms: u64) -> Result<Option<String>> {
-        let ready_path = self.storage_dir.join(KnowledgeBaseConstants::SENTINEL_FILE_NAME);
+        let ready_path = self
+            .storage_dir
+            .join(KnowledgeBaseConstants::SENTINEL_FILE_NAME);
         let start = std::time::Instant::now();
 
         while start.elapsed().as_millis() < timeout_ms as u128 {
             if ready_path.exists() {
-                let content = fs::read_to_string(&ready_path)
-                    .context("Failed to read ready file")?;
+                let content =
+                    fs::read_to_string(&ready_path).context("Failed to read ready file")?;
                 return Ok(Some(content));
             }
             std::thread::sleep(std::time::Duration::from_millis(
-                KnowledgeBaseConstants::READY_FILE_POLL_INTERVAL_MS
+                KnowledgeBaseConstants::READY_FILE_POLL_INTERVAL_MS,
             ));
         }
 
@@ -365,7 +377,6 @@ impl KBDownloadService {
         &self.zip_file
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -411,7 +422,10 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let service = KBDownloadService::new(temp_dir.path().to_path_buf());
 
-        assert_eq!(service.timestamp_file.file_name().unwrap(), "last_update_check.timestamp");
+        assert_eq!(
+            service.timestamp_file.file_name().unwrap(),
+            "last_update_check.timestamp"
+        );
     }
 
     #[test]
@@ -479,7 +493,8 @@ mod tests {
         let old_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_millis() - (10 * 24 * 60 * 60 * 1000);
+            .as_millis()
+            - (10 * 24 * 60 * 60 * 1000);
         fs::write(&service.timestamp_file, old_time.to_string()).unwrap();
 
         // Old timestamp means should check
@@ -519,6 +534,9 @@ mod tests {
         assert!(!KnowledgeBaseConstants::URL_FIELD.is_empty());
         assert_eq!(KnowledgeBaseConstants::MAX_RESULTS_SEARCH, 10);
         assert_eq!(KnowledgeBaseConstants::TITLE_BOOST, 10.0);
-        assert_eq!(KnowledgeBaseConstants::SENTINEL_FILE_NAME, "index_ready.json");
+        assert_eq!(
+            KnowledgeBaseConstants::SENTINEL_FILE_NAME,
+            "index_ready.json"
+        );
     }
 }

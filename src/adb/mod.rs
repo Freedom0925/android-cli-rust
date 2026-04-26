@@ -1,6 +1,6 @@
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Command;
-use anyhow::{Result, Context};
 
 /// ADB Device
 #[derive(Debug, Clone)]
@@ -22,7 +22,7 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "rm -rf",
     "dd if=",
     "mkfs",
-    ":(){ :|:& };:",  // Fork bomb
+    ":(){ :|:& };:", // Fork bomb
     "chmod 777",
     "> /dev/sd",
     "wget",
@@ -44,18 +44,23 @@ fn validate_shell_command(cmd: &str) -> Result<()> {
     }
 
     // Check for shell injection attempts
-    if cmd.contains(';') && (cmd.contains("rm") || cmd.contains("reboot") || cmd.contains("format")) {
-        return Err(anyhow::anyhow!("Command appears to contain shell injection attempt"));
+    if cmd.contains(';') && (cmd.contains("rm") || cmd.contains("reboot") || cmd.contains("format"))
+    {
+        return Err(anyhow::anyhow!(
+            "Command appears to contain shell injection attempt"
+        ));
     }
 
     // Check for pipe to dangerous commands
-    if cmd.contains('|') && cmd.split('|').any(|part| {
-        let trimmed = part.trim();
-        trimmed.starts_with("rm") ||
-        trimmed.starts_with("dd") ||
-        trimmed.contains("/dev/sd")
-    }) {
-        return Err(anyhow::anyhow!("Command pipes to potentially dangerous operation"));
+    if cmd.contains('|')
+        && cmd.split('|').any(|part| {
+            let trimmed = part.trim();
+            trimmed.starts_with("rm") || trimmed.starts_with("dd") || trimmed.contains("/dev/sd")
+        })
+    {
+        return Err(anyhow::anyhow!(
+            "Command pipes to potentially dangerous operation"
+        ));
     }
 
     Ok(())
@@ -75,7 +80,10 @@ fn validate_package_name(package: &str) -> Result<()> {
     // Check for valid characters
     for c in package.chars() {
         if !c.is_alphanumeric() && c != '.' && c != '_' && c != '-' {
-            return Err(anyhow::anyhow!("Package name contains invalid character: '{}'", c));
+            return Err(anyhow::anyhow!(
+                "Package name contains invalid character: '{}'",
+                c
+            ));
         }
     }
 
@@ -95,7 +103,10 @@ fn validate_serial(serial: &str) -> Result<()> {
     // Check for valid characters
     for c in serial.chars() {
         if !c.is_alphanumeric() && c != '-' && c != '_' && c != ':' && c != '.' {
-            return Err(anyhow::anyhow!("Serial contains invalid character: '{}'", c));
+            return Err(anyhow::anyhow!(
+                "Serial contains invalid character: '{}'",
+                c
+            ));
         }
     }
 
@@ -165,7 +176,8 @@ impl AdbService {
                 let state = parts[1].to_string();
 
                 // Parse additional info
-                let model = parts.iter()
+                let model = parts
+                    .iter()
                     .find(|p| p.starts_with("model:"))
                     .map(|p| p.split(':').nth(1).unwrap_or("unknown").to_string());
 
@@ -188,7 +200,8 @@ impl AdbService {
     pub fn get_device_info(&self, serial: &str) -> Result<Device> {
         let model = self.get_prop(serial, "ro.product.model")?;
         let android_version = self.get_prop(serial, "ro.build.version.release")?;
-        let api_level = self.get_prop(serial, "ro.build.version.sdk")?
+        let api_level = self
+            .get_prop(serial, "ro.build.version.sdk")?
             .and_then(|v| v.parse::<i32>().ok());
 
         Ok(Device {
@@ -203,8 +216,11 @@ impl AdbService {
     /// Get system property
     fn get_prop(&self, serial: &str, prop: &str) -> Result<Option<String>> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("getprop").arg(prop)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("getprop")
+            .arg(prop)
             .output()?;
 
         if output.status.success() {
@@ -225,8 +241,10 @@ impl AdbService {
         validate_shell_command(cmd)?;
 
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg(cmd)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg(cmd)
             .output()
             .with_context(|| format!("Failed to execute shell command: {}", cmd))?;
 
@@ -245,7 +263,8 @@ impl AdbService {
         println!("Installing {} on {}...", apk_path.display(), serial);
 
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
+            .arg("-s")
+            .arg(serial)
             .arg("install")
             .arg("-r") // Replace existing
             .arg(apk_path)
@@ -273,16 +292,13 @@ impl AdbService {
         println!("Installing {} APKs on {}...", apk_paths.len(), serial);
 
         let mut cmd = Command::new(&self.adb_path);
-        cmd.arg("-s").arg(serial)
-            .arg("install-multiple")
-            .arg("-r");
+        cmd.arg("-s").arg(serial).arg("install-multiple").arg("-r");
 
         for apk in apk_paths {
             cmd.arg(apk);
         }
 
-        let output = cmd.output()
-            .context("Failed to install multiple APKs")?;
+        let output = cmd.output().context("Failed to install multiple APKs")?;
 
         if !output.status.success() {
             return Err(anyhow::anyhow!(
@@ -308,8 +324,10 @@ impl AdbService {
         println!("Uninstalling {} from {}...", package, serial);
 
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("uninstall").arg(package)
+            .arg("-s")
+            .arg(serial)
+            .arg("uninstall")
+            .arg(package)
             .output()
             .context("Failed to uninstall package")?;
 
@@ -332,8 +350,11 @@ impl AdbService {
     /// Forward port
     pub fn forward(&self, serial: &str, local: &str, remote: &str) -> Result<()> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("forward").arg(local).arg(remote)
+            .arg("-s")
+            .arg(serial)
+            .arg("forward")
+            .arg(local)
+            .arg(remote)
             .output()
             .context("Failed to forward port")?;
 
@@ -351,8 +372,11 @@ impl AdbService {
     /// Remove forward
     pub fn forward_remove(&self, serial: &str, local: &str) -> Result<()> {
         Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("forward").arg("--remove").arg(local)
+            .arg("-s")
+            .arg(serial)
+            .arg("forward")
+            .arg("--remove")
+            .arg(local)
             .output()
             .context("Failed to remove forward")?;
 
@@ -362,8 +386,11 @@ impl AdbService {
     /// Push file to device
     pub fn push(&self, serial: &str, local: &PathBuf, remote: &str) -> Result<()> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("push").arg(local).arg(remote)
+            .arg("-s")
+            .arg(serial)
+            .arg("push")
+            .arg(local)
+            .arg(remote)
             .output()
             .context("Failed to push file")?;
 
@@ -380,8 +407,11 @@ impl AdbService {
     /// Pull file from device
     pub fn pull(&self, serial: &str, remote: &str, local: &PathBuf) -> Result<()> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("pull").arg(remote).arg(local)
+            .arg("-s")
+            .arg(serial)
+            .arg("pull")
+            .arg(remote)
+            .arg(local)
             .output()
             .context("Failed to pull file")?;
 
@@ -400,8 +430,11 @@ impl AdbService {
         validate_serial(serial)?;
 
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("cat").arg(remote_path)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("cat")
+            .arg(remote_path)
             .output()
             .with_context(|| format!("Failed to read file: {}", remote_path))?;
 
@@ -423,16 +456,25 @@ impl AdbService {
 
         // Execute UIAutomator dump
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("uiautomator").arg("dump").arg("--compressed").arg(remote_path)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("uiautomator")
+            .arg("dump")
+            .arg("--compressed")
+            .arg(remote_path)
             .output()
             .context("Failed to dump UI hierarchy")?;
 
         // If compressed fails, try without compressed for older devices
         if !output.status.success() {
             let fallback_output = Command::new(&self.adb_path)
-                .arg("-s").arg(serial)
-                .arg("shell").arg("uiautomator").arg("dump").arg(remote_path)
+                .arg("-s")
+                .arg(serial)
+                .arg("shell")
+                .arg("uiautomator")
+                .arg("dump")
+                .arg(remote_path)
                 .output()
                 .context("Failed to dump UI hierarchy (fallback)")?;
 
@@ -456,8 +498,12 @@ impl AdbService {
 
         // Take screenshot on device
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("screencap").arg("-p").arg(remote_path)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("screencap")
+            .arg("-p")
+            .arg(remote_path)
             .output()
             .context("Failed to take screenshot")?;
 
@@ -473,8 +519,11 @@ impl AdbService {
 
         // Cleanup remote file
         Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("rm").arg(remote_path)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("rm")
+            .arg(remote_path)
             .output()?;
 
         Ok(())
@@ -485,8 +534,11 @@ impl AdbService {
         validate_serial(serial)?;
 
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("exec-out").arg("screencap").arg("-p")
+            .arg("-s")
+            .arg(serial)
+            .arg("exec-out")
+            .arg("screencap")
+            .arg("-p")
             .output()
             .context("Failed to capture screenshot")?;
 
@@ -508,9 +560,13 @@ impl AdbService {
         let intent = format!("{}/{}", package, activity);
 
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("am").arg("start")
-            .arg("-n").arg(&intent)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("am")
+            .arg("start")
+            .arg("-n")
+            .arg(&intent)
             .output()
             .context("Failed to launch activity")?;
 
@@ -526,8 +582,12 @@ impl AdbService {
     /// Get package path on device
     pub fn get_package_path(&self, serial: &str, package: &str) -> Result<Option<String>> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("pm").arg("path").arg(package)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("pm")
+            .arg("path")
+            .arg(package)
             .output()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -543,10 +603,14 @@ impl AdbService {
     /// Monkey launches the default launchable activity
     pub fn monkey_launch(&self, serial: &str, package: &str) -> Result<()> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("monkey")
-            .arg("-p").arg(package)
-            .arg("-c").arg("android.intent.category.LAUNCHER")
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("monkey")
+            .arg("-p")
+            .arg(package)
+            .arg("-c")
+            .arg("android.intent.category.LAUNCHER")
             .arg("1")
             .output()
             .context("Failed to launch app with monkey")?;
@@ -563,8 +627,12 @@ impl AdbService {
     /// Get list of installed packages matching a pattern
     pub fn list_packages(&self, serial: &str, filter: Option<&str>) -> Result<Vec<String>> {
         let mut cmd = Command::new(&self.adb_path);
-        cmd.arg("-s").arg(serial)
-            .arg("shell").arg("pm").arg("list").arg("packages");
+        cmd.arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("pm")
+            .arg("list")
+            .arg("packages");
 
         if let Some(f) = filter {
             cmd.arg(f);
@@ -573,7 +641,8 @@ impl AdbService {
         let output = cmd.output()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
 
-        let packages: Vec<String> = stdout.lines()
+        let packages: Vec<String> = stdout
+            .lines()
             .filter(|l| l.starts_with("package:"))
             .map(|l| l.replace("package:", "").trim().to_string())
             .collect();
@@ -584,12 +653,17 @@ impl AdbService {
     /// Get launchable activity for a package using dumpsys
     pub fn get_launchable_activity(&self, serial: &str, package: &str) -> Result<Option<String>> {
         let output = Command::new(&self.adb_path)
-            .arg("-s").arg(serial)
-            .arg("shell").arg("cmd").arg("package")
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("cmd")
+            .arg("package")
             .arg("resolve-activity")
             .arg("--brief")
-            .arg("-a").arg("android.intent.action.MAIN")
-            .arg("-c").arg("android.intent.category.LAUNCHER")
+            .arg("-a")
+            .arg("android.intent.action.MAIN")
+            .arg("-c")
+            .arg("android.intent.category.LAUNCHER")
             .arg(package)
             .output()?;
 
@@ -597,8 +671,7 @@ impl AdbService {
         // Output format: "Activity name: com.package/com.package.Activity"
         for line in stdout.lines() {
             if line.contains("Activity name:") {
-                let activity = line.split(':').nth(1)
-                    .map(|s| s.trim().to_string());
+                let activity = line.split(':').nth(1).map(|s| s.trim().to_string());
                 return Ok(activity);
             }
         }

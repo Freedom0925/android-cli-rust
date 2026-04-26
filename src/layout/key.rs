@@ -1,5 +1,5 @@
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Unique key for UI element identification
 ///
@@ -18,7 +18,9 @@ pub struct Key {
 impl Key {
     /// Create an empty key
     pub fn empty() -> Self {
-        Self { value: String::new() }
+        Self {
+            value: String::new(),
+        }
     }
 
     /// Create a new key with the given value

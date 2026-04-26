@@ -31,7 +31,11 @@ pub struct KbDocFile {
 
 impl KbDocFile {
     /// Create KbDocFile with explicit metadata (matches Google's KbDocFile constructor)
-    pub fn with_metadata(filepath: String, content: String, metadata: HashMap<String, String>) -> Self {
+    pub fn with_metadata(
+        filepath: String,
+        content: String,
+        metadata: HashMap<String, String>,
+    ) -> Self {
         // Extract summary from first 500 characters (matches Google's implementation)
         let summary = content.chars().take(500).collect();
 
@@ -118,7 +122,9 @@ impl KbDocFile {
 
     /// Get URL from metadata
     pub fn url(&self) -> Option<&str> {
-        self.metadata.get("url").map(|s| s.as_str())
+        self.metadata
+            .get("url")
+            .map(|s| s.as_str())
             .or_else(|| self.metadata.get("relative_url").map(|s| s.as_str()))
     }
 
@@ -129,7 +135,9 @@ impl KbDocFile {
 
     /// Get keywords from metadata
     pub fn keywords(&self) -> Option<&str> {
-        self.metadata.get("keywords").map(|s| s.as_str())
+        self.metadata
+            .get("keywords")
+            .map(|s| s.as_str())
             .or_else(|| self.metadata.get("tags").map(|s| s.as_str()))
     }
 }
@@ -171,7 +179,10 @@ pub struct SentinelFileContent {
 impl SentinelFileContent {
     /// Create a new sentinel file content
     pub fn new(index_error: bool, zip_hash: Option<String>) -> Self {
-        Self { index_error, zip_hash }
+        Self {
+            index_error,
+            zip_hash,
+        }
     }
 
     /// Create a sentinel indicating successful indexing
@@ -250,7 +261,8 @@ mod tests {
 
     #[test]
     fn test_extract_summary() {
-        let content = "# Title\n\nFirst paragraph line.\nSecond line.\n\n# Another header\nMore content";
+        let content =
+            "# Title\n\nFirst paragraph line.\nSecond line.\n\n# Another header\nMore content";
         let summary = KbDocFile::extract_summary(content);
 
         assert!(summary.contains("First paragraph"));

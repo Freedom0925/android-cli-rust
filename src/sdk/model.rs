@@ -91,7 +91,7 @@ impl Revision {
         match (self.preview, other.preview) {
             (None, None) => std::cmp::Ordering::Equal,
             (None, Some(_)) => std::cmp::Ordering::Greater, // stable > preview
-            (Some(_), None) => std::cmp::Ordering::Less,     // preview < stable
+            (Some(_), None) => std::cmp::Ordering::Less,    // preview < stable
             (Some(s), Some(o)) => s.cmp(&o),
         }
     }
@@ -123,7 +123,13 @@ impl SdkEntry {
         }
     }
 
-    pub fn with_archive(path: String, revision: Revision, url: String, size: u64, sha1: String) -> Self {
+    pub fn with_archive(
+        path: String,
+        revision: Revision,
+        url: String,
+        size: u64,
+        sha1: String,
+    ) -> Self {
         Self {
             path,
             revision,
@@ -142,7 +148,9 @@ pub struct Sdk {
 
 impl Sdk {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     pub fn with_entries(entries: Vec<SdkEntry>) -> Self {
@@ -156,13 +164,20 @@ impl Sdk {
 
     /// Find entry by path and version
     pub fn find_with_version(&self, path: &str, revision: &Revision) -> Option<&SdkEntry> {
-        self.entries.iter().find(|e| e.path == path && e.revision.cmp(&revision) == std::cmp::Ordering::Equal)
+        self.entries
+            .iter()
+            .find(|e| e.path == path && e.revision.cmp(&revision) == std::cmp::Ordering::Equal)
     }
 
     /// Delete entry by path
     pub fn delete(&self, path: &str) -> Self {
         Self {
-            entries: self.entries.iter().filter(|e| e.path != path).cloned().collect(),
+            entries: self
+                .entries
+                .iter()
+                .filter(|e| e.path != path)
+                .cloned()
+                .collect(),
         }
     }
 
@@ -195,7 +210,8 @@ impl Sdk {
     /// - removed: entries in self that don't exist in other
     pub fn diff(&self, other: &Sdk) -> (Sdk, Sdk, Sdk) {
         let common = Sdk::with_entries(
-            self.entries.iter()
+            self.entries
+                .iter()
                 .filter(|e| {
                     if let Some(other_entry) = other.find(&e.path) {
                         e.revision.cmp(&other_entry.revision) == std::cmp::Ordering::Equal
@@ -204,27 +220,30 @@ impl Sdk {
                     }
                 })
                 .cloned()
-                .collect()
+                .collect(),
         );
 
         let changed = Sdk::with_entries(
-            other.entries.iter()
+            other
+                .entries
+                .iter()
                 .filter(|e| {
                     let self_entry = self.find(&e.path);
                     match self_entry {
-                        None => true, // New entry
+                        None => true,                                                        // New entry
                         Some(s) => e.revision.cmp(&s.revision) != std::cmp::Ordering::Equal, // Different version
                     }
                 })
                 .cloned()
-                .collect()
+                .collect(),
         );
 
         let removed = Sdk::with_entries(
-            self.entries.iter()
+            self.entries
+                .iter()
                 .filter(|e| other.find(&e.path).is_none())
                 .cloned()
-                .collect()
+                .collect(),
         );
 
         (common, changed, removed)
@@ -272,12 +291,18 @@ mod tests {
     #[test]
     fn test_sdk_diff() {
         let sdk1 = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::parse("34.0.0").unwrap()),
+            SdkEntry::new(
+                "build-tools".to_string(),
+                Revision::parse("34.0.0").unwrap(),
+            ),
             SdkEntry::new("platforms".to_string(), Revision::parse("34").unwrap()),
         ]);
 
         let sdk2 = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::parse("35.0.0").unwrap()),
+            SdkEntry::new(
+                "build-tools".to_string(),
+                Revision::parse("35.0.0").unwrap(),
+            ),
             SdkEntry::new("platforms".to_string(), Revision::parse("34").unwrap()),
         ]);
 

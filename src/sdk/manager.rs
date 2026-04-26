@@ -1,9 +1,9 @@
-use std::path::{Path, PathBuf};
-use anyhow::{Result, Context, anyhow};
 use crate::http::Downloader;
-use crate::sdk::{Sdk, SdkEntry, Revision, Storage, Repository, Channel};
+use crate::sdk::arm_sdk::{CustomArch, CustomSdkDownloader};
 use crate::sdk::diff::SdkDiff;
-use crate::sdk::arm_sdk::{CustomSdkDownloader, CustomArch};
+use crate::sdk::{Channel, Repository, Revision, Sdk, SdkEntry, Storage};
+use anyhow::{anyhow, Context, Result};
+use std::path::{Path, PathBuf};
 
 /// SDK Manager - orchestrates SDK package management
 pub struct SdkManager {
@@ -31,11 +31,9 @@ impl SdkManager {
         index_url: &str,
         base_url: &str,
     ) -> Result<Self> {
-        let storage = Storage::new(storage_path)
-            .context("Failed to initialize storage")?;
+        let storage = Storage::new(storage_path).context("Failed to initialize storage")?;
 
-        let downloader = Downloader::new()
-            .context("Failed to create downloader")?;
+        let downloader = Downloader::new().context("Failed to create downloader")?;
 
         // Check if we need to use ARM fallback
         if needs_arm_fallback() {
@@ -123,7 +121,12 @@ impl SdkManager {
     }
 
     /// Scan a package directory for installed versions
-    fn scan_package_dir(&self, dir: &Path, package_type: &str, entries: &mut Vec<SdkEntry>) -> Result<()> {
+    fn scan_package_dir(
+        &self,
+        dir: &Path,
+        package_type: &str,
+        entries: &mut Vec<SdkEntry>,
+    ) -> Result<()> {
         use std::fs;
 
         for entry in fs::read_dir(dir)? {
@@ -136,13 +139,10 @@ impl SdkManager {
             }
 
             // Get version from directory name
-            let name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // Parse version
-            let mut revision = Revision::parse(name)
-                .unwrap_or_else(|| Revision::new(0));
+            let mut revision = Revision::parse(name).unwrap_or_else(|| Revision::new(0));
 
             // Check for package.xml or source.properties
             let source_props = path.join("source.properties");
@@ -153,8 +153,7 @@ impl SdkManager {
                     for line in props.lines() {
                         if line.starts_with("Pkg.Revision=") {
                             let version = line.split('=').nth(1).unwrap_or(name);
-                            revision = Revision::parse(version.trim())
-                                .unwrap_or(revision);
+                            revision = Revision::parse(version.trim()).unwrap_or(revision);
                             break;
                         }
                     }
@@ -233,7 +232,8 @@ impl SdkManager {
 
         // Parse requested packages to infer version (if specified)
         // Take the first package's version, warn if multiple different versions
-        let versions: Vec<String> = packages.iter()
+        let versions: Vec<String> = packages
+            .iter()
             .filter_map(|p| {
                 let parts: Vec<&str> = p.split(';').collect();
                 if parts.len() > 1 {
@@ -248,10 +248,16 @@ impl SdkManager {
 
         // Warn if multiple different versions specified
         if versions.len() > 1 {
-            let unique_versions: Vec<&String> = versions.iter().collect::<std::collections::HashSet<_>>()
-                .into_iter().collect();
+            let unique_versions: Vec<&String> = versions
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
             if unique_versions.len() > 1 {
-                println!("Warning: Multiple versions specified in packages: {}", versions.join(", "));
+                println!(
+                    "Warning: Multiple versions specified in packages: {}",
+                    versions.join(", ")
+                );
                 println!("Using first version: {}", version.as_ref().unwrap());
             }
         }
@@ -324,11 +330,14 @@ impl SdkManager {
 
     /// Download and install a single package
     fn install_package(&self, entry: &SdkEntry) -> Result<()> {
-        println!("Installing {} {}...", entry.path, entry.revision.to_string());
+        println!(
+            "Installing {} {}...",
+            entry.path,
+            entry.revision.to_string()
+        );
 
         // Get URL from entry
-        let url = entry.url.as_ref()
-            .context("Package has no download URL")?;
+        let url = entry.url.as_ref().context("Package has no download URL")?;
 
         // Download archive
         let archive_path = self.download_archive(url, &entry.sha1)?;
@@ -337,7 +346,8 @@ impl SdkManager {
         self.storage.unzip(&entry.sha1)?;
 
         // Extract and install
-        self.storage.install_to_sdk(&entry.sha1, &self.sdk_path, &entry.path)?;
+        self.storage
+            .install_to_sdk(&entry.sha1, &self.sdk_path, &entry.path)?;
 
         // Write legacy package.xml
         self.write_package_xml(&entry)?;
@@ -352,7 +362,10 @@ impl SdkManager {
         // Check if already downloaded
         if self.storage.has_archive(expected_sha) {
             println!("Archive {} already downloaded", expected_sha);
-            return Ok(self.storage.archives_dir.join(format!("{}.zip", expected_sha)));
+            return Ok(self
+                .storage
+                .archives_dir
+                .join(format!("{}.zip", expected_sha)));
         }
 
         // Download to temp file
@@ -413,8 +426,16 @@ impl SdkManager {
              </sdk:archives>\n\
              </sdk:package>",
             entry.revision.major,
-            entry.revision.minor.map(|m| format!("<sdk:minor>{}</sdk:minor>\n", m)).unwrap_or_default(),
-            entry.revision.micro.map(|m| format!("<sdk:micro>{}</sdk:micro>\n", m)).unwrap_or_default(),
+            entry
+                .revision
+                .minor
+                .map(|m| format!("<sdk:minor>{}</sdk:minor>\n", m))
+                .unwrap_or_default(),
+            entry
+                .revision
+                .micro
+                .map(|m| format!("<sdk:micro>{}</sdk:micro>\n", m))
+                .unwrap_or_default(),
             entry.path,
             entry.size,
             entry.sha1
@@ -426,10 +447,17 @@ impl SdkManager {
     }
 
     /// List packages (available or installed)
-    pub fn list(&self, all: bool, all_versions: bool, pattern: Option<&str>, channel: Channel) -> Result<()> {
+    pub fn list(
+        &self,
+        all: bool,
+        all_versions: bool,
+        pattern: Option<&str>,
+        channel: Channel,
+    ) -> Result<()> {
         let installed = self.scan_local_sdk()?;
 
-        self.repository.list(Some(&installed), all, all_versions, pattern, channel);
+        self.repository
+            .list(Some(&installed), all, all_versions, pattern, channel);
 
         Ok(())
     }
@@ -454,7 +482,12 @@ impl SdkManager {
                 let current = installed.find(&path);
                 if let Some(current) = current {
                     if pkg.revision.cmp(&current.revision) == std::cmp::Ordering::Greater {
-                        println!("Update available: {} {} -> {}", path, current.revision.to_string(), pkg.revision.to_string());
+                        println!(
+                            "Update available: {} {} -> {}",
+                            path,
+                            current.revision.to_string(),
+                            pkg.revision.to_string()
+                        );
                         updates.push(path);
                     } else {
                         println!("{} {} is up to date", path, current.revision.to_string());
@@ -580,8 +613,7 @@ impl SdkManager {
         let parts: Vec<&str> = package.split(';').collect();
         let path = parts[0].to_string();
         let revision = if parts.len() > 1 {
-            Revision::parse(parts[1])
-                .with_context(|| format!("Invalid version: {}", parts[1]))?
+            Revision::parse(parts[1]).with_context(|| format!("Invalid version: {}", parts[1]))?
         } else {
             Revision::new(0)
         };
@@ -598,7 +630,7 @@ impl SdkManager {
                 // Find archive for current platform
                 let archive = p.find_archive(
                     crate::sdk::repository::Platform::current(),
-                    crate::sdk::repository::Architecture::current()
+                    crate::sdk::repository::Architecture::current(),
                 );
 
                 if let Some(archive) = archive {
@@ -627,7 +659,12 @@ impl SdkManager {
         println!("Packages: {}", sdk.entries.len());
 
         for entry in &sdk.entries {
-            println!("  {} {} - SHA: {}", entry.path, entry.revision.to_string(), entry.sha1);
+            println!(
+                "  {} {} - SHA: {}",
+                entry.path,
+                entry.revision.to_string(),
+                entry.sha1
+            );
         }
 
         // Save materialized index
@@ -657,7 +694,11 @@ impl SdkManager {
             let actual_sha = Storage::hash(&data);
 
             if actual_sha != sha {
-                return Err(anyhow!("SHA mismatch: expected {}, got {}", sha, actual_sha));
+                return Err(anyhow!(
+                    "SHA mismatch: expected {}, got {}",
+                    sha,
+                    actual_sha
+                ));
             }
 
             self.storage.save_archive(sha, &data)?;
@@ -668,7 +709,7 @@ impl SdkManager {
             if let Some(pkg) = pkg {
                 let archive = pkg.find_archive(
                     crate::sdk::repository::Platform::current(),
-                    crate::sdk::repository::Architecture::current()
+                    crate::sdk::repository::Architecture::current(),
                 );
 
                 if let Some(archive) = archive {
@@ -691,7 +732,10 @@ impl SdkManager {
                     return Err(anyhow!("No archive available for current platform"));
                 }
             } else {
-                return Err(anyhow!("Cannot find package with SHA {} in repository", sha));
+                return Err(anyhow!(
+                    "Cannot find package with SHA {} in repository",
+                    sha
+                ));
             }
         }
 
@@ -700,10 +744,10 @@ impl SdkManager {
 
     /// Find package by archive SHA
     fn find_package_by_sha(&self, sha: &str) -> Option<&crate::sdk::repository::Package> {
-        self.repository.packages.iter()
-            .find(|p| {
-                p.archives.iter().any(|a| a.artifact.checksum == sha)
-            })
+        self.repository
+            .packages
+            .iter()
+            .find(|p| p.archives.iter().any(|a| a.artifact.checksum == sha))
     }
 
     /// Print storage object by SHA
@@ -712,14 +756,19 @@ impl SdkManager {
         let sdk = self.storage.read_sdk(sha)?;
 
         if json {
-            let json_str = serde_json::to_string_pretty(&sdk)
-                .context("Failed to serialize SDK to JSON")?;
+            let json_str =
+                serde_json::to_string_pretty(&sdk).context("Failed to serialize SDK to JSON")?;
             println!("{}", json_str);
         } else {
             println!("SDK Index: {}", sha);
             println!("Packages: {}", sdk.entries.len());
             for entry in &sdk.entries {
-                println!("  {} {} - {} bytes", entry.path, entry.revision.to_string(), entry.size);
+                println!(
+                    "  {} {} - {} bytes",
+                    entry.path,
+                    entry.revision.to_string(),
+                    entry.size
+                );
                 if !entry.sha1.is_empty() {
                     println!("    SHA: {}", entry.sha1);
                 }
@@ -811,14 +860,27 @@ impl SdkManager {
             return Ok(());
         }
 
-        println!("Installing {} {}...", entry.path, entry.revision.to_string());
+        println!(
+            "Installing {} {}...",
+            entry.path,
+            entry.revision.to_string()
+        );
 
         // Debug storage paths
         #[cfg(debug_assertions)]
         {
-            eprintln!("DEBUG: install_from_entry - storage.base_path={}", self.storage.base_path.display());
-            eprintln!("DEBUG: install_from_entry - storage.archives_dir={}", self.storage.archives_dir.display());
-            eprintln!("DEBUG: install_from_entry - storage.unzipped_dir={}", self.storage.unzipped_dir.display());
+            eprintln!(
+                "DEBUG: install_from_entry - storage.base_path={}",
+                self.storage.base_path.display()
+            );
+            eprintln!(
+                "DEBUG: install_from_entry - storage.archives_dir={}",
+                self.storage.archives_dir.display()
+            );
+            eprintln!(
+                "DEBUG: install_from_entry - storage.unzipped_dir={}",
+                self.storage.unzipped_dir.display()
+            );
             eprintln!("DEBUG: install_from_entry - entry.sha1={}", entry.sha1);
         }
 
@@ -840,7 +902,8 @@ impl SdkManager {
         // Install to SDK
         #[cfg(debug_assertions)]
         eprintln!("DEBUG: install_from_entry - calling install_to_sdk");
-        self.storage.install_to_sdk(&entry.sha1, &self.sdk_path, &entry.path)?;
+        self.storage
+            .install_to_sdk(&entry.sha1, &self.sdk_path, &entry.path)?;
 
         // Write package.xml
         self.write_package_xml(entry)?;
@@ -862,7 +925,11 @@ impl SdkManager {
         let new_sha = self.storage.save_sdk(&updated_sdk)?;
 
         println!("Updated index: {} -> {}", target_sha, new_sha);
-        println!("Packages: {} -> {}", target_sdk.entries.len(), updated_sdk.entries.len());
+        println!(
+            "Packages: {} -> {}",
+            target_sdk.entries.len(),
+            updated_sdk.entries.len()
+        );
 
         Ok(())
     }
@@ -881,8 +948,16 @@ impl SdkManager {
 
         println!("Diff: {} vs {}", sha1, sha2);
         println!("Common: {} ({} packages)", common_sha, common.entries.len());
-        println!("Changed: {} ({} packages)", changed_sha, changed.entries.len());
-        println!("Removed: {} ({} packages)", removed_sha, removed.entries.len());
+        println!(
+            "Changed: {} ({} packages)",
+            changed_sha,
+            changed.entries.len()
+        );
+        println!(
+            "Removed: {} ({} packages)",
+            removed_sha,
+            removed.entries.len()
+        );
 
         if verbose {
             if !common.entries.is_empty() {
@@ -958,8 +1033,7 @@ impl SdkManager {
         let parts: Vec<&str> = package.split(';').collect();
         let path = parts[0].to_string();
         let revision = if parts.len() > 1 {
-            Revision::parse(parts[1])
-                .with_context(|| format!("Invalid version: {}", parts[1]))?
+            Revision::parse(parts[1]).with_context(|| format!("Invalid version: {}", parts[1]))?
         } else {
             // Try to find installed version
             let installed = self.scan_local_sdk()?;
@@ -1086,7 +1160,7 @@ impl SdkManager {
 
             let archive = pkg.find_archive(
                 crate::sdk::repository::Platform::current(),
-                crate::sdk::repository::Architecture::current()
+                crate::sdk::repository::Architecture::current(),
             );
 
             if let Some(archive) = archive {

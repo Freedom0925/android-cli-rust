@@ -70,7 +70,12 @@ impl SdkDiff {
         if self.updated.len() > 0 {
             println!("Updated: {} packages", self.updated.len());
             for (old, new) in &self.updated {
-                println!("  {} {} -> {}", old.path, old.revision.to_string(), new.revision.to_string());
+                println!(
+                    "  {} {} -> {}",
+                    old.path,
+                    old.revision.to_string(),
+                    new.revision.to_string()
+                );
             }
         }
         if self.added.len() > 0 {
@@ -141,9 +146,10 @@ mod tests {
     #[test]
     fn test_diff_add() {
         let sdk1 = Sdk::with_entries(vec![]);
-        let sdk2 = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::new(34)),
-        ]);
+        let sdk2 = Sdk::with_entries(vec![SdkEntry::new(
+            "build-tools".to_string(),
+            Revision::new(34),
+        )]);
 
         let diff = SdkDiff::calculate(&sdk1, &sdk2);
 
@@ -154,12 +160,14 @@ mod tests {
 
     #[test]
     fn test_diff_update() {
-        let sdk1 = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::new(33)),
-        ]);
-        let sdk2 = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::new(34)),
-        ]);
+        let sdk1 = Sdk::with_entries(vec![SdkEntry::new(
+            "build-tools".to_string(),
+            Revision::new(33),
+        )]);
+        let sdk2 = Sdk::with_entries(vec![SdkEntry::new(
+            "build-tools".to_string(),
+            Revision::new(34),
+        )]);
 
         let diff = SdkDiff::calculate(&sdk1, &sdk2);
 

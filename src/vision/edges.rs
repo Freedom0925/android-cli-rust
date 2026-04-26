@@ -1,5 +1,5 @@
-use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use anyhow::Result;
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 
 /// Sobel edge detection with automatic or manual threshold
 ///
@@ -21,7 +21,10 @@ impl SobelEdges {
     ///
     /// # Returns
     /// Binary edge image (white = edge, black = no edge)
-    pub fn sobel_edges_with_threshold(img: &DynamicImage, threshold: i32) -> ImageBuffer<Luma<u8>, Vec<u8>> {
+    pub fn sobel_edges_with_threshold(
+        img: &DynamicImage,
+        threshold: i32,
+    ) -> ImageBuffer<Luma<u8>, Vec<u8>> {
         let (width, height) = img.dimensions();
 
         // Convert to grayscale
@@ -32,25 +35,23 @@ impl SobelEdges {
         let mut histogram = [0u32; 256];
 
         // Apply Sobel kernel (skip border pixels)
-        for y in 1..height-1 {
-            for x in 1..width-1 {
+        for y in 1..height - 1 {
+            for x in 1..width - 1 {
                 // Sobel X kernel: [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
-                let gx =
-                    -(grayscale.get_pixel(x-1, y-1)[0] as f64)
-                    + grayscale.get_pixel(x+1, y-1)[0] as f64
-                    - 2.0 * grayscale.get_pixel(x-1, y)[0] as f64
-                    + 2.0 * grayscale.get_pixel(x+1, y)[0] as f64
-                    - (grayscale.get_pixel(x-1, y+1)[0] as f64)
-                    + grayscale.get_pixel(x+1, y+1)[0] as f64;
+                let gx = -(grayscale.get_pixel(x - 1, y - 1)[0] as f64)
+                    + grayscale.get_pixel(x + 1, y - 1)[0] as f64
+                    - 2.0 * grayscale.get_pixel(x - 1, y)[0] as f64
+                    + 2.0 * grayscale.get_pixel(x + 1, y)[0] as f64
+                    - (grayscale.get_pixel(x - 1, y + 1)[0] as f64)
+                    + grayscale.get_pixel(x + 1, y + 1)[0] as f64;
 
                 // Sobel Y kernel: [[-1, -2, -1], [0, 0, 0], [1, 2, 1]]
-                let gy =
-                    -(grayscale.get_pixel(x-1, y-1)[0] as f64)
-                    - 2.0 * grayscale.get_pixel(x, y-1)[0] as f64
-                    - (grayscale.get_pixel(x+1, y-1)[0] as f64)
-                    + grayscale.get_pixel(x-1, y+1)[0] as f64
-                    + 2.0 * grayscale.get_pixel(x, y+1)[0] as f64
-                    + grayscale.get_pixel(x+1, y+1)[0] as f64;
+                let gy = -(grayscale.get_pixel(x - 1, y - 1)[0] as f64)
+                    - 2.0 * grayscale.get_pixel(x, y - 1)[0] as f64
+                    - (grayscale.get_pixel(x + 1, y - 1)[0] as f64)
+                    + grayscale.get_pixel(x - 1, y + 1)[0] as f64
+                    + 2.0 * grayscale.get_pixel(x, y + 1)[0] as f64
+                    + grayscale.get_pixel(x + 1, y + 1)[0] as f64;
 
                 // Compute magnitude
                 let magnitude = (gx * gx + gy * gy).sqrt();
@@ -87,23 +88,21 @@ impl SobelEdges {
         let grayscale = img.to_luma8();
         let mut edge_image = ImageBuffer::new(width, height);
 
-        for y in 1..height-1 {
-            for x in 1..width-1 {
-                let gx =
-                    -(grayscale.get_pixel(x-1, y-1)[0] as f64)
-                    + grayscale.get_pixel(x+1, y-1)[0] as f64
-                    - 2.0 * grayscale.get_pixel(x-1, y)[0] as f64
-                    + 2.0 * grayscale.get_pixel(x+1, y)[0] as f64
-                    - (grayscale.get_pixel(x-1, y+1)[0] as f64)
-                    + grayscale.get_pixel(x+1, y+1)[0] as f64;
+        for y in 1..height - 1 {
+            for x in 1..width - 1 {
+                let gx = -(grayscale.get_pixel(x - 1, y - 1)[0] as f64)
+                    + grayscale.get_pixel(x + 1, y - 1)[0] as f64
+                    - 2.0 * grayscale.get_pixel(x - 1, y)[0] as f64
+                    + 2.0 * grayscale.get_pixel(x + 1, y)[0] as f64
+                    - (grayscale.get_pixel(x - 1, y + 1)[0] as f64)
+                    + grayscale.get_pixel(x + 1, y + 1)[0] as f64;
 
-                let gy =
-                    -(grayscale.get_pixel(x-1, y-1)[0] as f64)
-                    - 2.0 * grayscale.get_pixel(x, y-1)[0] as f64
-                    - (grayscale.get_pixel(x+1, y-1)[0] as f64)
-                    + grayscale.get_pixel(x-1, y+1)[0] as f64
-                    + 2.0 * grayscale.get_pixel(x, y+1)[0] as f64
-                    + grayscale.get_pixel(x+1, y+1)[0] as f64;
+                let gy = -(grayscale.get_pixel(x - 1, y - 1)[0] as f64)
+                    - 2.0 * grayscale.get_pixel(x, y - 1)[0] as f64
+                    - (grayscale.get_pixel(x + 1, y - 1)[0] as f64)
+                    + grayscale.get_pixel(x - 1, y + 1)[0] as f64
+                    + 2.0 * grayscale.get_pixel(x, y + 1)[0] as f64
+                    + grayscale.get_pixel(x + 1, y + 1)[0] as f64;
 
                 let magnitude = (gx * gx + gy * gy).sqrt();
                 let edge_value = magnitude.min(255.0) as u8;

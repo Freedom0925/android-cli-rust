@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::fs;
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
-use anyhow::{Result, Context, bail};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Default device profile for emulator creation
 pub const DEFAULT_DEVICE_PROFILE: &str = "medium_phone";
@@ -14,16 +14,23 @@ fn validate_avd_name(name: &str) -> Result<()> {
     }
     for c in name.chars() {
         if !c.is_alphanumeric() && c != '_' && c != '-' {
-            bail!("Invalid AVD name '{}': contains forbidden character '{}'. \
+            bail!(
+                "Invalid AVD name '{}': contains forbidden character '{}'. \
                   AVD names must only contain alphanumeric characters, underscores, or hyphens.",
-                  name, c);
+                name,
+                c
+            );
         }
     }
     // Additional check: no shell metacharacters
     let forbidden_patterns = [";", "|", "&", "$", "`", "(", ")", "<", ">", " ", "\n", "\r"];
     for pattern in forbidden_patterns {
         if name.contains(pattern) {
-            bail!("Invalid AVD name '{}': contains shell metacharacter or space '{}'", name, pattern);
+            bail!(
+                "Invalid AVD name '{}': contains shell metacharacter or space '{}'",
+                name,
+                pattern
+            );
         }
     }
     Ok(())
@@ -55,17 +62,18 @@ impl Avd {
             }
         }
 
-        let name = path.file_name()
+        let name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .map(|n| n.replace(".ini", ""))
             .unwrap_or_default();
 
-        let avd_path = config.get("path")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-                home.join(".android").join("avd").join(format!("{}.avd", name))
-            });
+        let avd_path = config.get("path").map(PathBuf::from).unwrap_or_else(|| {
+            let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+            home.join(".android")
+                .join("avd")
+                .join(format!("{}.avd", name))
+        });
 
         let config_ini = avd_path.join("config.ini");
         let avd_config = if config_ini.exists() {
@@ -79,8 +87,15 @@ impl Avd {
         let ram_size = avd_config.get("hw.ramSize").and_then(|v| v.parse().ok());
 
         Ok(Self {
-            name, path: avd_path, device, api_level: None, android_version: None,
-            sys_image, ram_size, running: false, config: avd_config,
+            name,
+            path: avd_path,
+            device,
+            api_level: None,
+            android_version: None,
+            sys_image,
+            ram_size,
+            running: false,
+            config: avd_config,
         })
     }
 
@@ -101,7 +116,10 @@ impl Avd {
 
     pub fn display_info(&self) -> String {
         let device = self.device.as_deref().unwrap_or("Unknown");
-        let ram = self.ram_size.map(|r| format!("{}MB", r)).unwrap_or_else(|| "Unknown".to_string());
+        let ram = self
+            .ram_size
+            .map(|r| format!("{}MB", r))
+            .unwrap_or_else(|| "Unknown".to_string());
         format!("{} RAM {}", device, ram)
     }
 }
@@ -120,7 +138,9 @@ impl AvdManager {
     }
 
     pub fn list(&self) -> Result<Vec<Avd>> {
-        if !self.avd_dir.exists() { return Ok(Vec::new()); }
+        if !self.avd_dir.exists() {
+            return Ok(Vec::new());
+        }
 
         let running = self.get_running_emulators()?;
         let mut avds = Vec::new();
@@ -141,7 +161,9 @@ impl AvdManager {
 
     fn get_running_emulators(&self) -> Result<Vec<String>> {
         let adb = self.sdk_path.join("platform-tools").join("adb");
-        if !adb.exists() { return Ok(Vec::new()); }
+        if !adb.exists() {
+            return Ok(Vec::new());
+        }
 
         let output = std::process::Command::new(&adb).arg("devices").output()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -162,7 +184,10 @@ impl AvdManager {
         // Validate AVD name
         validate_avd_name(name)?;
 
-        let sys_dir = self.sdk_path.join("system-images").join(format!("android-{}", api_level));
+        let sys_dir = self
+            .sdk_path
+            .join("system-images")
+            .join(format!("android-{}", api_level));
         if !sys_dir.exists() {
             return Err(anyhow::anyhow!("System image API {} not found", api_level));
         }
@@ -194,7 +219,9 @@ impl AvdManager {
 
         let mut cmd = std::process::Command::new(&emulator);
         cmd.arg("-avd").arg(name);
-        if cold_boot { cmd.arg("-no-snapshot-load"); }
+        if cold_boot {
+            cmd.arg("-no-snapshot-load");
+        }
         cmd.spawn()?;
         println!("Starting emulator '{}'...", name);
         Ok(())
@@ -202,14 +229,20 @@ impl AvdManager {
 
     pub fn stop(&self, device: Option<&str>) -> Result<()> {
         let adb = self.sdk_path.join("platform-tools").join("adb");
-        if !adb.exists() { return Err(anyhow::anyhow!("ADB not found")); }
+        if !adb.exists() {
+            return Err(anyhow::anyhow!("ADB not found"));
+        }
 
         if let Some(dev) = device {
-            std::process::Command::new(&adb).args(["-s", dev, "emu", "kill"]).spawn()?;
+            std::process::Command::new(&adb)
+                .args(["-s", dev, "emu", "kill"])
+                .spawn()?;
             println!("Stopping '{}'...", dev);
         } else {
             for emu in self.get_running_emulators()? {
-                std::process::Command::new(&adb).args(["-s", &emu, "emu", "kill"]).spawn()?;
+                std::process::Command::new(&adb)
+                    .args(["-s", &emu, "emu", "kill"])
+                    .spawn()?;
                 println!("Stopping '{}'...", emu);
             }
         }
@@ -221,20 +254,32 @@ impl AvdManager {
         validate_avd_name(name)?;
 
         let running = self.get_running_emulators()?;
-        let running_names: Vec<String> = running.iter().map(|r| r.replace("emulator-", "")).collect();
+        let running_names: Vec<String> =
+            running.iter().map(|r| r.replace("emulator-", "")).collect();
 
         if running_names.contains(&name.to_string()) && !force {
-            return Err(anyhow::anyhow!("Emulator '{}' is running. Use --force", name));
+            return Err(anyhow::anyhow!(
+                "Emulator '{}' is running. Use --force",
+                name
+            ));
         }
 
         // Verify path contains ".avd" to prevent accidental deletion
         let avd_path = self.avd_dir.join(format!("{}.avd", name));
-        if !avd_path.to_str().map(|s| s.contains(".avd")).unwrap_or(false) {
+        if !avd_path
+            .to_str()
+            .map(|s| s.contains(".avd"))
+            .unwrap_or(false)
+        {
             bail!("Invalid AVD path: path must contain .avd extension");
         }
-        if avd_path.exists() { fs::remove_dir_all(&avd_path)?; }
+        if avd_path.exists() {
+            fs::remove_dir_all(&avd_path)?;
+        }
         let ini_path = self.avd_dir.join(format!("{}.ini", name));
-        if ini_path.exists() { fs::remove_file(&ini_path)?; }
+        if ini_path.exists() {
+            fs::remove_file(&ini_path)?;
+        }
 
         println!("Removed AVD '{}'", name);
         Ok(())
@@ -280,7 +325,9 @@ mod tests {
 
         // Verify it's in the profiles list
         let profiles = AvdManager::list_profiles();
-        assert!(profiles.iter().any(|(name, _)| *name == DEFAULT_DEVICE_PROFILE));
+        assert!(profiles
+            .iter()
+            .any(|(name, _)| *name == DEFAULT_DEVICE_PROFILE));
     }
 
     #[test]

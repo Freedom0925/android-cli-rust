@@ -1,6 +1,6 @@
-use std::path::Path;
+use anyhow::{Context, Result};
 use std::fs;
-use anyhow::{Result, Context};
+use std::path::Path;
 
 /// Ensure a directory exists, creating it if necessary
 pub fn ensure_dir(path: &Path) -> Result<()> {
@@ -13,7 +13,9 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
 
 /// Get file name from path
 pub fn file_name(path: &Path) -> Option<String> {
-    path.file_name().and_then(|n| n.to_str()).map(|s| s.to_string())
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string())
 }
 
 /// Check if a path has a specific extension

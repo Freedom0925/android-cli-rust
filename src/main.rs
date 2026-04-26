@@ -1,25 +1,27 @@
-use clap::{Parser, Subcommand};
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use android_cli::sdk::{SdkManager, Channel};
-use android_cli::emulator::AvdManager;
 use android_cli::adb::AdbService;
-use android_cli::skills::SkillManager;
-use android_cli::template::{TemplateProcessor, DeviceTemplates};
-use android_cli::update::Updater;
-use android_cli::docs::DocsCLI;
 use android_cli::create::TemplateEngineRunner;
-use android_cli::screen::{ScreenCommand, ResolveCommand};
-use android_cli::layout::LayoutCommand;
 use android_cli::describe::DescribeCLI;
+use android_cli::docs::DocsCLI;
+use android_cli::emulator::AvdManager;
+use android_cli::layout::LayoutCommand;
+use android_cli::screen::{ResolveCommand, ScreenCommand};
+use android_cli::sdk::{Channel, SdkManager};
+use android_cli::skills::SkillManager;
+use android_cli::template::{DeviceTemplates, TemplateProcessor};
+use android_cli::update::Updater;
 
 /// Android CLI - Pure Rust implementation
 #[derive(Parser)]
 #[command(name = "android")]
 #[command(version = "0.1.0")]
 #[command(about = "Android development tools CLI")]
-#[command(long_about = "Android CLI provides tools for SDK management, emulator control, device interaction, and more.")]
+#[command(
+    long_about = "Android CLI provides tools for SDK management, emulator control, device interaction, and more."
+)]
 #[command(disable_help_subcommand = true)]
 struct Cli {
     /// Path to Android SDK
@@ -31,11 +33,21 @@ struct Cli {
     no_metrics: bool,
 
     /// SDK index URL (hidden)
-    #[arg(long, global = true, hide = true, default_value = "https://dl.google.com/android/repository/package_list.binpb")]
+    #[arg(
+        long,
+        global = true,
+        hide = true,
+        default_value = "https://dl.google.com/android/repository/package_list.binpb"
+    )]
     sdk_index: String,
 
     /// SDK artifact URL (hidden)
-    #[arg(long, global = true, hide = true, default_value = "https://dl.google.com/android/repository")]
+    #[arg(
+        long,
+        global = true,
+        hide = true,
+        default_value = "https://dl.google.com/android/repository"
+    )]
     sdk_url: String,
 
     #[command(subcommand)]
@@ -267,9 +279,7 @@ enum SdkCommands {
         force: bool,
     },
     /// Remove SDK packages
-    Remove {
-        package: String,
-    },
+    Remove { package: String },
     /// Check SDK status
     #[command(hide = true)]
     Status,
@@ -458,15 +468,9 @@ enum DeviceCommands {
         command: Vec<String>,
     },
     /// Install APK
-    Install {
-        device: String,
-        apks: Vec<String>,
-    },
+    Install { device: String, apks: Vec<String> },
     /// Uninstall package
-    Uninstall {
-        device: String,
-        package: String,
-    },
+    Uninstall { device: String, package: String },
     /// Port forwarding
     Forward {
         device: String,
@@ -572,28 +576,54 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     tracing_subscriber::fmt::init();
 
-    let ctx = Context::new(
-        cli.sdk,
-        cli.sdk_index,
-        cli.sdk_url,
-        cli.no_metrics,
-    )?;
+    let ctx = Context::new(cli.sdk, cli.sdk_index, cli.sdk_url, cli.no_metrics)?;
 
     match cli.command {
         Commands::Sdk { command } => execute_sdk(command, &ctx),
         Commands::Emulator { command } => execute_emulator(command, &ctx),
         Commands::Device { command } => execute_device(command, &ctx),
-        Commands::Run { apks, device, type_, activity, debug } => execute_run(&apks, &device, &type_, &activity, debug, &ctx),
+        Commands::Run {
+            apks,
+            device,
+            type_,
+            activity,
+            debug,
+        } => execute_run(&apks, &device, &type_, &activity, debug, &ctx),
         Commands::Skills { command } => execute_skills(command, &ctx),
-        Commands::Template { process, profile, output } => execute_template(&process, &profile, &output, &ctx),
+        Commands::Template {
+            process,
+            profile,
+            output,
+        } => execute_template(&process, &profile, &output, &ctx),
         Commands::Init { force } => execute_init(force, &ctx),
         Commands::Describe { project_dir } => execute_describe(project_dir.as_deref(), &ctx),
         Commands::Docs { command } => execute_docs(command),
         Commands::Update { url } => execute_update(url.as_deref()),
         Commands::Info { field } => execute_info(field.as_deref(), &ctx),
-        Commands::Create { name, output, min_sdk, list, template, verbose, dry_run: _ } => execute_create(name.as_deref(), &output, min_sdk.as_deref(), list, template.as_deref(), verbose, &ctx),
+        Commands::Create {
+            name,
+            output,
+            min_sdk,
+            list,
+            template,
+            verbose,
+            dry_run: _,
+        } => execute_create(
+            name.as_deref(),
+            &output,
+            min_sdk.as_deref(),
+            list,
+            template.as_deref(),
+            verbose,
+            &ctx,
+        ),
         Commands::Screen { command } => execute_screen(command, &ctx),
-        Commands::Layout { output, diff, pretty, device } => execute_layout(output.as_deref(), diff, pretty, device.as_deref(), &ctx),
+        Commands::Layout {
+            output,
+            diff,
+            pretty,
+            device,
+        } => execute_layout(output.as_deref(), diff, pretty, device.as_deref(), &ctx),
         Commands::Help { command } => execute_help(command.as_deref()),
         Commands::UploadMetrics => execute_upload_metrics(&ctx),
         Commands::TestMetrics { command } => execute_test_metrics(command),
@@ -611,14 +641,25 @@ struct Context {
 }
 
 impl Context {
-    fn new(sdk_path: Option<String>, sdk_index: String, sdk_url: String, no_metrics: bool) -> Result<Self> {
+    fn new(
+        sdk_path: Option<String>,
+        sdk_index: String,
+        sdk_url: String,
+        no_metrics: bool,
+    ) -> Result<Self> {
         let sys_info = SysInfoService::detect();
         let sdk_path = sdk_path
             .map(PathBuf::from)
             .or_else(|| std::env::var("ANDROID_HOME").ok().map(PathBuf::from))
             .unwrap_or_else(|| sys_info.default_sdk_path());
 
-        Ok(Self { sdk_path, sdk_index, sdk_url, sys_info, no_metrics })
+        Ok(Self {
+            sdk_path,
+            sdk_index,
+            sdk_url,
+            sys_info,
+            no_metrics,
+        })
     }
 }
 
@@ -662,14 +703,24 @@ impl SysInfoService {
         }
     }
 
-    fn cli_storage_path(&self) -> PathBuf { self.android_user_home.join("cli") }
+    fn cli_storage_path(&self) -> PathBuf {
+        self.android_user_home.join("cli")
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Platform { Linux, Mac, Windows }
+enum Platform {
+    Linux,
+    Mac,
+    Windows,
+}
 
 #[derive(Debug, Clone, Copy)]
-enum Architecture { X86, X64, Aarch64 }
+enum Architecture {
+    X86,
+    X64,
+    Aarch64,
+}
 
 /// Get channel from canary/beta flags (matches Kotlin getChannel)
 fn get_channel_from_flags(canary: bool, beta: bool) -> Channel {
@@ -688,18 +739,39 @@ fn get_channel_from_flags(canary: bool, beta: bool) -> Channel {
 // SDK commands
 fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
     let storage_path = ctx.sys_info.cli_storage_path();
-    let manager = SdkManager::new(storage_path, ctx.sdk_path.clone(), &ctx.sdk_index, &ctx.sdk_url)?;
+    let manager = SdkManager::new(
+        storage_path,
+        ctx.sdk_path.clone(),
+        &ctx.sdk_index,
+        &ctx.sdk_url,
+    )?;
 
     match cmd {
-        SdkCommands::Install { packages, canary, beta, force } => {
+        SdkCommands::Install {
+            packages,
+            canary,
+            beta,
+            force,
+        } => {
             let channel = get_channel_from_flags(canary, beta);
             manager.install(&packages, channel, force)?;
         }
-        SdkCommands::List { all, all_versions, pattern, canary, beta } => {
+        SdkCommands::List {
+            all,
+            all_versions,
+            pattern,
+            canary,
+            beta,
+        } => {
             let channel = get_channel_from_flags(canary, beta);
             manager.list(all, all_versions, pattern.as_deref(), channel)?;
         }
-        SdkCommands::Update { package, canary, beta, force } => {
+        SdkCommands::Update {
+            package,
+            canary,
+            beta,
+            force,
+        } => {
             let channel = get_channel_from_flags(canary, beta);
             let packages = package.as_ref().map(|p| vec![p.clone()]);
             manager.update(packages.as_deref(), channel, force)?;
@@ -714,7 +786,11 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
         SdkCommands::Fetch { check } => {
             manager.fetch(check)?;
         }
-        SdkCommands::Resolve { packages, canary, beta } => {
+        SdkCommands::Resolve {
+            packages,
+            canary,
+            beta,
+        } => {
             let channel = get_channel_from_flags(canary, beta);
             for pkg in &packages {
                 manager.resolve(pkg, channel)?;
@@ -738,13 +814,24 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
         SdkCommands::Checkout { sha, force } => {
             manager.checkout(&sha, force)?;
         }
-        SdkCommands::UpdateIndex { source_sha, target_sha } => {
+        SdkCommands::UpdateIndex {
+            source_sha,
+            target_sha,
+        } => {
             manager.update_index(&source_sha, &target_sha)?;
         }
-        SdkCommands::Diff { sha1, sha2, verbose } => {
+        SdkCommands::Diff {
+            sha1,
+            sha2,
+            verbose,
+        } => {
             manager.diff_cmd(&sha1, &sha2, verbose)?;
         }
-        SdkCommands::Rm { sha, archive, unzipped } => {
+        SdkCommands::Rm {
+            sha,
+            archive,
+            unzipped,
+        } => {
             manager.rm(&sha, archive, unzipped)?;
         }
         SdkCommands::Unzip { sha } => {
@@ -756,7 +843,10 @@ fn execute_sdk(cmd: SdkCommands, ctx: &Context) -> Result<()> {
         SdkCommands::DeleteIndex { sha, package } => {
             manager.delete_index(&sha, &package)?;
         }
-        SdkCommands::Gc { dry_run, aggressive } => {
+        SdkCommands::Gc {
+            dry_run,
+            aggressive,
+        } => {
             manager.gc_cmd(dry_run, aggressive)?;
         }
     }
@@ -775,14 +865,22 @@ fn execute_emulator(cmd: EmulatorCommands, ctx: &Context) -> Result<()> {
             } else {
                 for avd in avds {
                     if long {
-                        println!("{}: {} [{}]", avd.name, avd.display_info(), if avd.running { "RUNNING" } else { "STOPPED" });
+                        println!(
+                            "{}: {} [{}]",
+                            avd.name,
+                            avd.display_info(),
+                            if avd.running { "RUNNING" } else { "STOPPED" }
+                        );
                     } else {
                         println!("{}", avd.name);
                     }
                 }
             }
         }
-        EmulatorCommands::Create { list_profiles, profile } => {
+        EmulatorCommands::Create {
+            list_profiles,
+            profile,
+        } => {
             if list_profiles {
                 // Lists the device profiles that can be used to create a device
                 println!("Available device profiles:");
@@ -826,7 +924,12 @@ fn execute_device(cmd: DeviceCommands, ctx: &Context) -> Result<()> {
                 println!("No devices connected.");
             } else {
                 for device in devices {
-                    println!("{} {} {}", device.serial, device.state, device.model.as_deref().unwrap_or(""));
+                    println!(
+                        "{} {} {}",
+                        device.serial,
+                        device.state,
+                        device.model.as_deref().unwrap_or("")
+                    );
                 }
             }
         }
@@ -846,15 +949,30 @@ fn execute_device(cmd: DeviceCommands, ctx: &Context) -> Result<()> {
         DeviceCommands::Uninstall { device, package } => {
             adb.uninstall(&device, &package)?;
         }
-        DeviceCommands::Forward { device, local, remote } => {
-            adb.forward(&device, &format!("tcp:{}", local), &format!("tcp:{}", remote))?;
+        DeviceCommands::Forward {
+            device,
+            local,
+            remote,
+        } => {
+            adb.forward(
+                &device,
+                &format!("tcp:{}", local),
+                &format!("tcp:{}", remote),
+            )?;
         }
     }
     Ok(())
 }
 
 // Run command
-fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: &Option<String>, debug: bool, ctx: &Context) -> Result<()> {
+fn execute_run(
+    apks: &[String],
+    device: &Option<String>,
+    type_: &str,
+    activity: &Option<String>,
+    debug: bool,
+    ctx: &Context,
+) -> Result<()> {
     let adb = AdbService::new(&ctx.sdk_path)?;
 
     // Select device
@@ -862,7 +980,8 @@ fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: 
         d.clone()
     } else {
         let devices = adb.devices()?;
-        let first = devices.first()
+        let first = devices
+            .first()
             .ok_or_else(|| anyhow::anyhow!("No devices connected"))?;
         first.serial.clone()
     };
@@ -872,7 +991,14 @@ fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: 
 
     // Install APKs
     let paths: Vec<PathBuf> = apks.iter().map(PathBuf::from).collect();
-    println!("Installing APKs: {}", paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
+    println!(
+        "Installing APKs: {}",
+        paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
     if paths.len() == 1 {
         adb.install(&target_device, &paths[0])?;
@@ -882,7 +1008,13 @@ fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: 
     println!("Installation completed successfully");
 
     // Get package name - try multiple methods
-    let package = get_package_from_apk_or_device(&paths[0], &adb, &target_device, &packages_before, &ctx.sdk_path)?;
+    let package = get_package_from_apk_or_device(
+        &paths[0],
+        &adb,
+        &target_device,
+        &packages_before,
+        &ctx.sdk_path,
+    )?;
 
     println!("App loaded: {}", package);
 
@@ -912,19 +1044,29 @@ fn execute_run(apks: &[String], device: &Option<String>, type_: &str, activity: 
 }
 
 /// Get package name from APK or detect from device after installation
-fn get_package_from_apk_or_device(apk_path: &PathBuf, adb: &AdbService, serial: &str, packages_before: &[String], sdk_path: &PathBuf) -> Result<String> {
+fn get_package_from_apk_or_device(
+    apk_path: &PathBuf,
+    adb: &AdbService,
+    serial: &str,
+    packages_before: &[String],
+    sdk_path: &PathBuf,
+) -> Result<String> {
     // Find aapt in SDK build-tools (use highest version)
     let aapt_path = find_aapt_in_sdk(sdk_path);
 
     // First try aapt
     let output = if let Some(aapt) = aapt_path {
         std::process::Command::new(&aapt)
-            .arg("dump").arg("badging").arg(apk_path)
+            .arg("dump")
+            .arg("badging")
+            .arg(apk_path)
             .output()
     } else {
         // Try system aapt as fallback
         std::process::Command::new("aapt")
-            .arg("dump").arg("badging").arg(apk_path)
+            .arg("dump")
+            .arg("badging")
+            .arg(apk_path)
             .output()
     };
 
@@ -937,8 +1079,7 @@ fn get_package_from_apk_or_device(apk_path: &PathBuf, adb: &AdbService, serial: 
                     for part in line.split_whitespace() {
                         if part.starts_with("name=") {
                             // Remove quotes if present
-                            let name = part.split('=').nth(1).unwrap_or("")
-                                .replace("'", "");
+                            let name = part.split('=').nth(1).unwrap_or("").replace("'", "");
                             if !name.is_empty() {
                                 return Ok(name);
                             }
@@ -957,7 +1098,8 @@ fn get_package_from_apk_or_device(apk_path: &PathBuf, adb: &AdbService, serial: 
     let packages_after = adb.list_packages(serial, None)?;
 
     // Find new package (installed since before)
-    let new_packages: Vec<String> = packages_after.iter()
+    let new_packages: Vec<String> = packages_after
+        .iter()
         .filter(|p| !packages_before.contains(p))
         .cloned()
         .collect();
@@ -967,25 +1109,34 @@ fn get_package_from_apk_or_device(apk_path: &PathBuf, adb: &AdbService, serial: 
         return Ok(new_packages[0].clone());
     } else if new_packages.len() > 1 {
         // Multiple new packages - try to match by APK name
-        let apk_name = apk_path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let apk_name = apk_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         for pkg in &new_packages {
             // Try partial match on package name
-            if pkg.contains(&apk_name.replace("-v", "").replace(".apk", "").replace(" ", "").to_lowercase()) {
+            if pkg.contains(
+                &apk_name
+                    .replace("-v", "")
+                    .replace(".apk", "")
+                    .replace(" ", "")
+                    .to_lowercase(),
+            ) {
                 println!("Matched package by name: {}", pkg);
                 return Ok(pkg.clone());
             }
         }
 
         // Return first new package as fallback
-        println!("Multiple new packages detected, using first: {}", new_packages[0]);
+        println!(
+            "Multiple new packages detected, using first: {}",
+            new_packages[0]
+        );
         return Ok(new_packages[0].clone());
     }
 
     // No new package detected - this shouldn't happen after successful install
-    Err(anyhow::anyhow!("Could not determine package name after installation"))
+    Err(anyhow::anyhow!(
+        "Could not determine package name after installation"
+    ))
 }
 
 /// Find aapt in SDK build-tools directory (use highest version)
@@ -1001,7 +1152,9 @@ fn find_aapt_in_sdk(sdk_path: &PathBuf) -> Option<PathBuf> {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
             // Skip non-version directories (like .DS_Store)
-            if name.starts_with('.') { continue; }
+            if name.starts_with('.') {
+                continue;
+            }
             // Check if aapt exists in this directory
             if entry.path().join("aapt").exists() {
                 versions.push(name);
@@ -1035,19 +1188,37 @@ fn execute_skills(cmd: SkillsCommands, ctx: &Context) -> Result<()> {
                 for skill in skills {
                     if long {
                         println!("{}: {} (v{})", skill.name, skill.description, skill.version);
-                        if skill.has_claude { println!("  - CLAUDE.md"); }
-                        if skill.has_gemini { println!("  - GEMINI.md"); }
+                        if skill.has_claude {
+                            println!("  - CLAUDE.md");
+                        }
+                        if skill.has_gemini {
+                            println!("  - GEMINI.md");
+                        }
                     } else {
                         println!("{}", skill.name);
                     }
                 }
             }
         }
-        SkillsCommands::Add { skill, all, agent, project } => {
+        SkillsCommands::Add {
+            skill,
+            all,
+            agent,
+            project,
+        } => {
             let project_path = project.as_ref().map(PathBuf::from);
-            manager.add(skill.as_deref(), all, agent.as_deref(), project_path.as_ref())?;
+            manager.add(
+                skill.as_deref(),
+                all,
+                agent.as_deref(),
+                project_path.as_ref(),
+            )?;
         }
-        SkillsCommands::Remove { skill, agent, project } => {
+        SkillsCommands::Remove {
+            skill,
+            agent,
+            project,
+        } => {
             let project_path = project.as_ref().map(PathBuf::from);
             manager.remove(&skill, agent.as_deref(), project_path.as_ref())?;
         }
@@ -1066,7 +1237,12 @@ fn execute_skills(cmd: SkillsCommands, ctx: &Context) -> Result<()> {
 }
 
 // Template commands
-fn execute_template(process: &Option<String>, profile: &Option<String>, output: &Option<String>, ctx: &Context) -> Result<()> {
+fn execute_template(
+    process: &Option<String>,
+    profile: &Option<String>,
+    output: &Option<String>,
+    ctx: &Context,
+) -> Result<()> {
     let _ = ctx; // unused
 
     if process.is_none() {
@@ -1078,7 +1254,9 @@ fn execute_template(process: &Option<String>, profile: &Option<String>, output: 
     }
 
     let template_path = PathBuf::from(process.as_ref().unwrap());
-    let output_path = output.as_ref().map(PathBuf::from)
+    let output_path = output
+        .as_ref()
+        .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
 
     let mut processor = TemplateProcessor::new();
@@ -1126,7 +1304,8 @@ fn execute_init(force: bool, ctx: &Context) -> Result<()> {
         std::fs::create_dir_all(&skills_dir)?;
 
         let bundled_skill_source = skills_dir.join("android-cli");
-        let skill_already_installed = bundled_skill_source.exists() && bundled_skill_source.join("SKILL.md").exists();
+        let skill_already_installed =
+            bundled_skill_source.exists() && bundled_skill_source.join("SKILL.md").exists();
 
         if !skill_already_installed || force {
             std::fs::create_dir_all(&bundled_skill_source)?;
@@ -1213,9 +1392,17 @@ When analyzing an Android project, `android describe --project-dir` provides:
 4. Analyze project structure before making build changes
 "#;
             std::fs::write(bundled_skill_source.join("SKILL.md"), skill_md_content)?;
-            println!("Skill 'android-cli' installed to {}/{}", home.display(), agent_path);
+            println!(
+                "Skill 'android-cli' installed to {}/{}",
+                home.display(),
+                agent_path
+            );
         } else if skill_already_installed && !force {
-            println!("Skill 'android-cli' already installed to {}/{} (use --force to reinstall)", home.display(), agent_path);
+            println!(
+                "Skill 'android-cli' already installed to {}/{} (use --force to reinstall)",
+                home.display(),
+                agent_path
+            );
         }
     }
 
@@ -1290,7 +1477,9 @@ fn execute_docs(command: Option<DocsCommands>) -> Result<()> {
             println!("Commands:");
             println!("  android docs search <query>  - Search Android KB");
             println!("  android docs stats           - Show KB index statistics");
-            println!("  android docs clear           - Clear KB cache (re-download on next search)");
+            println!(
+                "  android docs clear           - Clear KB cache (re-download on next search)"
+            );
             println!();
             println!("KB ZIP source:");
             println!("  https://developer.android.com/static/api/kb/kb.zip");
@@ -1355,7 +1544,10 @@ fn execute_info(field: Option<&str>, ctx: &Context) -> Result<()> {
             println!("Android CLI Environment Information:");
             println!("  SDK Path:      {}", ctx.sdk_path.display());
             println!("  User Home:     {}", ctx.sys_info.user_home.display());
-            println!("  Android Home:  {}", ctx.sys_info.android_user_home.display());
+            println!(
+                "  Android Home:  {}",
+                ctx.sys_info.android_user_home.display()
+            );
             println!("  Platform:      {}", platform_str);
             println!("  Architecture:  {}", arch_str);
             println!("  CLI Version:   {}", version);
@@ -1384,9 +1576,9 @@ fn execute_create(
         return Ok(());
     }
 
-    let name = name.ok_or_else(|| anyhow::anyhow!(
-        "The name of the application is required (e.g. 'My Application')"
-    ))?;
+    let name = name.ok_or_else(|| {
+        anyhow::anyhow!("The name of the application is required (e.g. 'My Application')")
+    })?;
 
     // Default template is empty-activity
     let template_name = template.unwrap_or("empty-activity");
@@ -1403,10 +1595,21 @@ fn execute_screen(command: ScreenCommands, ctx: &Context) -> Result<()> {
     let mut screen_cmd = ScreenCommand::new(&ctx.sdk_path)?;
 
     match command {
-        ScreenCommands::Capture { output, annotate, cluster_merge_threshold, debug } => {
+        ScreenCommands::Capture {
+            output,
+            annotate,
+            cluster_merge_threshold,
+            debug,
+        } => {
             // Kotlin version uses AdbKt.getDevice which auto-selects if no device specified
             // We pass None for device to match Kotlin behavior
-            screen_cmd.capture(None, output.as_deref(), annotate, cluster_merge_threshold, debug)?;
+            screen_cmd.capture(
+                None,
+                output.as_deref(),
+                annotate,
+                cluster_merge_threshold,
+                debug,
+            )?;
         }
         ScreenCommands::Resolve { screenshot, string } => {
             let result = ResolveCommand::resolve(&screenshot, &string)?;
@@ -1546,7 +1749,9 @@ fn print_command_help(cmd_name: &str) {
             println!("    -a, --annotate                 Draws labeled bounding boxes around UI elements");
             println!("  resolve --screenshot <file> --string <str>");
             println!("    --screenshot                   A screenshot captured with 'screen capture --annotate'");
-            println!("    --string                       The string to substitute coordinates into");
+            println!(
+                "    --string                       The string to substitute coordinates into"
+            );
         }
         "layout" => {
             println!("Returns the layout tree of an application");
@@ -1555,7 +1760,9 @@ fn print_command_help(cmd_name: &str) {
             println!();
             println!("Options:");
             println!("  -o, --output <file>  Writes the layout tree to the specified file");
-            println!("  -d, --diff           Returns flat list of elements that changed since last dump");
+            println!(
+                "  -d, --diff           Returns flat list of elements that changed since last dump"
+            );
             println!("  -p, --pretty         Pretty-prints the returned JSON");
             println!("  --device <serial>    The device serial number");
         }
@@ -1569,7 +1776,9 @@ fn print_command_help(cmd_name: &str) {
             println!();
             println!("Options:");
             println!("  --name <name>        The name of the application (required)");
-            println!("  -o, --output <dir>   The destination project directory path (default: '.')");
+            println!(
+                "  -o, --output <dir>   The destination project directory path (default: '.')"
+            );
             println!("  --minSdk <version>   The minSdk supported by the application");
             println!("  --list               List all available templates");
             println!("  --verbose            Enables verbose output");
@@ -1612,12 +1821,16 @@ fn execute_test_metrics(command: Option<TestMetricsCommands>) -> Result<()> {
             if thread {
                 std::thread::spawn(|| {
                     panic!("Test crash from thread");
-                }).join().unwrap();
+                })
+                .join()
+                .unwrap();
             } else {
                 panic!("Test crash");
             }
         }
-        Some(TestMetricsCommands::Report { test_subcommand_flag: _ }) => {
+        Some(TestMetricsCommands::Report {
+            test_subcommand_flag: _,
+        }) => {
             println!("Report invocation test (no metrics in Rust version)");
         }
         None => {

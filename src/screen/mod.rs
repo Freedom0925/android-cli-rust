@@ -1,12 +1,15 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::fs;
-use anyhow::{Result, Context, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
-use crate::vision::{Rect, ImageUtils, PixelCluster, Region, MutableRegionGroup, group_regions, SobelEdges, find_connected_clusters};
-use image::{DynamicImage, ImageBuffer, Rgba, Luma};
+use crate::vision::{
+    find_connected_clusters, group_regions, ImageUtils, MutableRegionGroup, PixelCluster, Rect,
+    Region, SobelEdges,
+};
+use image::{DynamicImage, ImageBuffer, Luma, Rgba};
 use std::io::Write;
 
 /// PNG IEND chunk marker (end of PNG data)
@@ -57,7 +60,11 @@ fn validate_device_id(device: &str) -> Result<()> {
     let forbidden_patterns = [";", "|", "&", "$", "`", "(", ")", "<", ">", "\n", "\r"];
     for pattern in forbidden_patterns {
         if device.contains(pattern) {
-            bail!("Invalid device identifier '{}': contains shell metacharacter '{}'", device, pattern);
+            bail!(
+                "Invalid device identifier '{}': contains shell metacharacter '{}'",
+                device,
+                pattern
+            );
         }
     }
     Ok(())
@@ -167,17 +174,19 @@ impl ScreenCommand {
         // Parent predicate: find smallest cluster that contains this one (matches Kotlin detectFeatures$parent)
         let parent = |cluster: &PixelCluster| {
             let cluster_bounds = cluster.bounds();
-            clusters.iter()
+            clusters
+                .iter()
                 .filter(|c| {
                     let c_bounds = c.bounds();
                     c_bounds != cluster_bounds && c_bounds.contains(&cluster_bounds)
                 })
                 .min_by_key(|c| c.bounds().width() * c.bounds().height())
-                .cloned()  // Return owned PixelCluster
+                .cloned() // Return owned PixelCluster
         };
 
         // Group regions using hierarchical grouping algorithm (matches Kotlin RegionKt.groupRegions)
-        let groups: Vec<MutableRegionGroup<PixelCluster>> = group_regions(clusters, neighbors, parent);
+        let groups: Vec<MutableRegionGroup<PixelCluster>> =
+            group_regions(clusters, neighbors, parent);
 
         // Filter by depth-based size thresholds (matches Kotlin when block)
         let features: Vec<FeatureInfo> = groups
@@ -198,12 +207,15 @@ impl ScreenCommand {
                 };
 
                 if passes {
-                    Some(FeatureInfo::new(i as u32, Bounds {
-                        left: bounds.min_x,
-                        top: bounds.min_y,
-                        right: bounds.max_x,
-                        bottom: bounds.max_y,
-                    }))
+                    Some(FeatureInfo::new(
+                        i as u32,
+                        Bounds {
+                            left: bounds.min_x,
+                            top: bounds.min_y,
+                            right: bounds.max_x,
+                            bottom: bounds.max_y,
+                        },
+                    ))
                 } else {
                     None
                 }
@@ -247,16 +259,14 @@ impl ScreenCommand {
                     idx as u32,
                     GREEN_COLOR,
                     4,
-                ).ok();
+                )
+                .ok();
             }
         }
     }
 
     /// Highlight clusters on image
-    pub fn highlight_clusters(
-        img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
-        clusters: &[PixelCluster],
-    ) {
+    pub fn highlight_clusters(img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, clusters: &[PixelCluster]) {
         for (i, cluster) in clusters.iter().enumerate() {
             let color = generate_color(i);
             for point in cluster.get_pixels() {
@@ -274,9 +284,7 @@ impl ScreenCommand {
         edges: &ImageBuffer<Luma<u8>, Vec<u8>>,
         clusters: &[PixelCluster],
     ) -> Result<()> {
-        let debug_dir = output_path.parent()
-            .unwrap_or(Path::new("."))
-            .join("debug");
+        let debug_dir = output_path.parent().unwrap_or(Path::new(".")).join("debug");
 
         fs::create_dir_all(&debug_dir)?;
 
@@ -304,9 +312,7 @@ impl ScreenCommand {
 
     /// Append JSON data to PNG file
     pub fn append_json_to_png(png_path: &Path, json: &str) -> Result<()> {
-        let mut file = fs::OpenOptions::new()
-            .append(true)
-            .open(png_path)?;
+        let mut file = fs::OpenOptions::new().append(true).open(png_path)?;
 
         file.write_all(json.as_bytes())?;
         Ok(())
@@ -319,12 +325,8 @@ impl ScreenCommand {
 
     /// Capture screenshot with vision-based feature detection
     /// Uses Sobel edge detection + clustering (matches Kotlin ScreenCommand.annotate)
-    pub fn capture_with_features(
-        &self,
-        device: Option<&str>,
-        output: Option<&str>,
-    ) -> Result<()> {
-        use crate::vision::{SobelEdges, find_connected_clusters};
+    pub fn capture_with_features(&self, device: Option<&str>, output: Option<&str>) -> Result<()> {
+        use crate::vision::{find_connected_clusters, SobelEdges};
 
         let adb = self.adb_path();
 
@@ -347,11 +349,13 @@ impl ScreenCommand {
         }
         cmd.args(["exec-out", "screencap", "-p"]);
 
-        let output_data = cmd.output()
-            .context("Failed to capture screenshot")?;
+        let output_data = cmd.output().context("Failed to capture screenshot")?;
 
         if !output_data.status.success() {
-            bail!("Screenshot capture failed: {}", String::from_utf8_lossy(&output_data.stderr));
+            bail!(
+                "Screenshot capture failed: {}",
+                String::from_utf8_lossy(&output_data.stderr)
+            );
         }
 
         // Load image
@@ -394,12 +398,13 @@ impl ScreenCommand {
         };
 
         // Save annotated image
-        annotated.save(&output_path)
+        annotated
+            .save(&output_path)
             .context("Failed to save annotated image")?;
 
         // Append feature JSON to PNG (matches Kotlin Files.write with APPEND)
-        let feature_json = serde_json::to_string(&features)
-            .context("Failed to serialize features")?;
+        let feature_json =
+            serde_json::to_string(&features).context("Failed to serialize features")?;
         Self::append_json_to_png(&output_path, &feature_json)?;
 
         println!("Annotated screenshot saved to: {}", output_path.display());
@@ -448,11 +453,13 @@ impl ScreenCommand {
         }
         cmd.args(["exec-out", "screencap", "-p"]);
 
-        let output_data = cmd.output()
-            .context("Failed to capture screenshot")?;
+        let output_data = cmd.output().context("Failed to capture screenshot")?;
 
         if !output_data.status.success() {
-            bail!("Screenshot capture failed: {}", String::from_utf8_lossy(&output_data.stderr));
+            bail!(
+                "Screenshot capture failed: {}",
+                String::from_utf8_lossy(&output_data.stderr)
+            );
         }
 
         // Determine output filename
@@ -490,11 +497,13 @@ impl ScreenCommand {
         }
         cmd.args(["shell", "uiautomator", "dump", remote_path]);
 
-        let output = cmd.output()
-            .context("Failed to dump UI hierarchy")?;
+        let output = cmd.output().context("Failed to dump UI hierarchy")?;
 
         if !output.status.success() {
-            bail!("UI dump failed: {}", String::from_utf8_lossy(&output.stderr));
+            bail!(
+                "UI dump failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         // Pull the dump file
@@ -504,8 +513,7 @@ impl ScreenCommand {
         }
         pull_cmd.args(["shell", "cat", remote_path]);
 
-        let xml_output = pull_cmd.output()
-            .context("Failed to read UI dump")?;
+        let xml_output = pull_cmd.output().context("Failed to read UI dump")?;
 
         let xml_content = String::from_utf8_lossy(&xml_output.stdout);
 
@@ -518,38 +526,41 @@ impl ScreenCommand {
     /// Annotate screenshot with UI element bounding boxes
     fn annotate_screenshot(&self, png_data: Vec<u8>, elements: Vec<UiElement>) -> Result<Vec<u8>> {
         // Load image from PNG data
-        let img = image::load_from_memory(&png_data)
-            .context("Failed to parse screenshot image")?;
+        let img = image::load_from_memory(&png_data).context("Failed to parse screenshot image")?;
 
         // Convert to RGBA for drawing
         let mut img_rgba = img.to_rgba8();
 
         // Create annotation metadata
-        let annotations: Vec<AnnotationData> = elements.iter().enumerate().map(|(idx, el)| {
-            AnnotationData {
+        let annotations: Vec<AnnotationData> = elements
+            .iter()
+            .enumerate()
+            .map(|(idx, el)| AnnotationData {
                 index: idx + 1,
                 text: el.text.clone(),
                 resource_id: el.resource_id.clone(),
                 class: el.class.clone(),
                 bounds: el.bounds.clone(),
                 clickable: el.clickable,
-            }
-        }).collect();
+            })
+            .collect();
 
         // Draw labeled regions on image
-        let features: Vec<FeatureInfo> = annotations.iter()
+        let features: Vec<FeatureInfo> = annotations
+            .iter()
             .map(|a| FeatureInfo::new(a.index as u32, a.bounds.clone()))
             .collect();
 
         Self::draw_labeled_regions(&mut img_rgba, &features);
 
         // Embed JSON into PNG for resolve functionality
-        let json = serde_json::to_string(&annotations)
-            .context("Failed to serialize annotations")?;
+        let json =
+            serde_json::to_string(&annotations).context("Failed to serialize annotations")?;
 
         // Convert to PNG bytes
         let mut cursor = std::io::Cursor::new(Vec::new());
-        img_rgba.write_to(&mut cursor, image::ImageFormat::Png)
+        img_rgba
+            .write_to(&mut cursor, image::ImageFormat::Png)
             .context("Failed to encode annotated image")?;
         let mut output = cursor.into_inner();
 
@@ -599,8 +610,8 @@ impl ResolveCommand {
         let json_content = std::fs::read_to_string(&annotation_path)
             .with_context(|| format!("Failed to read {}", annotation_path.display()))?;
 
-        let annotations: Vec<AnnotationData> = serde_json::from_str(&json_content)
-            .context("Failed to parse annotation file")?;
+        let annotations: Vec<AnnotationData> =
+            serde_json::from_str(&json_content).context("Failed to parse annotation file")?;
 
         // Convert annotations to features
         let features: Vec<FeatureInfo> = annotations
@@ -614,23 +625,23 @@ impl ResolveCommand {
     /// Resolve placeholders using feature info
     fn resolve_with_features(string: &str, features: &[FeatureInfo]) -> Result<String> {
         // Build feature map by label
-        let feature_map: HashMap<u32, &FeatureInfo> = features
-            .iter()
-            .map(|f| (f.label, f))
-            .collect();
+        let feature_map: HashMap<u32, &FeatureInfo> =
+            features.iter().map(|f| (f.label, f)).collect();
 
         // Replace #N placeholders with coordinates
         let re = regex::Regex::new(r"#(\d+)").unwrap();
-        let result = re.replace_all(string, |caps: &regex::Captures| {
-            if let Some(idx_str) = caps.get(1) {
-                if let Ok(label) = idx_str.as_str().parse::<u32>() {
-                    if let Some(feature) = feature_map.get(&label) {
-                        return feature.center_string();
+        let result = re
+            .replace_all(string, |caps: &regex::Captures| {
+                if let Some(idx_str) = caps.get(1) {
+                    if let Ok(label) = idx_str.as_str().parse::<u32>() {
+                        if let Some(feature) = feature_map.get(&label) {
+                            return feature.center_string();
+                        }
                     }
                 }
-            }
-            caps.get(0).unwrap().as_str().to_string()
-        }).to_string();
+                caps.get(0).unwrap().as_str().to_string()
+            })
+            .to_string();
 
         Ok(result)
     }
@@ -657,15 +668,17 @@ fn extract_png_embedded_json(png_data: &[u8]) -> Result<Vec<FeatureInfo>> {
     let json_str = String::from_utf8_lossy(json_bytes);
 
     // Trim any trailing data after JSON
-    let json_end = json_str.rfind(']').map(|p| p + 1)
+    let json_end = json_str
+        .rfind(']')
+        .map(|p| p + 1)
         .or_else(|| json_str.rfind('}').map(|p| p + 1))
         .unwrap_or(json_str.len());
 
     let json_content = &json_str[..json_end];
 
     // Parse JSON
-    let features: Vec<FeatureInfo> = serde_json::from_str(json_content)
-        .context("Failed to parse embedded JSON from PNG")?;
+    let features: Vec<FeatureInfo> =
+        serde_json::from_str(json_content).context("Failed to parse embedded JSON from PNG")?;
 
     Ok(features)
 }
@@ -714,12 +727,16 @@ fn parse_ui_dump(xml: &str) -> Result<Vec<UiElement>> {
 }
 
 /// Recursively collect interactive elements from UI tree
-fn collect_interactive_elements(node: &crate::layout::UiNode, elements: &mut Vec<UiElement>, index: &mut i32) {
+fn collect_interactive_elements(
+    node: &crate::layout::UiNode,
+    elements: &mut Vec<UiElement>,
+    index: &mut i32,
+) {
     // Include elements that are clickable, have text, or have resource_id
     if node.interactions.contains("clickable")
         || !node.text.is_empty()
-        || !node.resource_id.is_empty() {
-
+        || !node.resource_id.is_empty()
+    {
         elements.push(UiElement {
             index: *index,
             text: node.text.clone(),
@@ -838,12 +855,7 @@ fn generate_color(index: usize) -> Rgba<u8> {
         _ => (c, 0.0, x),
     };
 
-    Rgba([
-        (r * 255.0) as u8,
-        (g * 255.0) as u8,
-        (b * 255.0) as u8,
-        255,
-    ])
+    Rgba([(r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8, 255])
 }
 
 #[cfg(test)]
@@ -887,7 +899,10 @@ mod tests {
     fn test_extract_attr() {
         let line = r#"<node text="Hello" resource-id="com.app:id/text" clickable="true"/>"#;
         assert_eq!(extract_attr(line, "text"), Some("Hello".to_string()));
-        assert_eq!(extract_attr(line, "resource-id"), Some("com.app:id/text".to_string()));
+        assert_eq!(
+            extract_attr(line, "resource-id"),
+            Some("com.app:id/text".to_string())
+        );
         assert_eq!(extract_attr(line, "clickable"), Some("true".to_string()));
     }
 
@@ -1036,10 +1051,7 @@ mod tests {
         std::fs::write(&screenshot_path, "").unwrap();
 
         // Test placeholder substitution
-        let result = ResolveCommand::resolve(
-            screenshot_path.to_str().unwrap(),
-            "tap #1 && tap #2",
-        );
+        let result = ResolveCommand::resolve(screenshot_path.to_str().unwrap(), "tap #1 && tap #2");
 
         // This should work since we have the annotation file
         assert!(result.is_ok());
@@ -1087,7 +1099,11 @@ mod tests {
             },
         ];
 
-        std::fs::write(&annotation_path, serde_json::to_string_pretty(&annotations).unwrap()).unwrap();
+        std::fs::write(
+            &annotation_path,
+            serde_json::to_string_pretty(&annotations).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&screenshot_path, "").unwrap();
 
         let result = ResolveCommand::resolve(
@@ -1105,10 +1121,7 @@ mod tests {
 
     #[test]
     fn test_resolve_command_missing_annotation_file() {
-        let result = ResolveCommand::resolve(
-            "/nonexistent/path/screenshot.png",
-            "tap #1",
-        );
+        let result = ResolveCommand::resolve("/nonexistent/path/screenshot.png", "tap #1");
         assert!(result.is_err());
     }
 
@@ -1123,7 +1136,9 @@ mod tests {
         assert!(!elements.is_empty());
 
         // Check that we have elements with correct bounds
-        let button_element = elements.iter().find(|e| e.resource_id == "com.app:id/button");
+        let button_element = elements
+            .iter()
+            .find(|e| e.resource_id == "com.app:id/button");
         assert!(button_element.is_some());
 
         let button = button_element.unwrap();
@@ -1208,8 +1223,14 @@ mod tests {
     fn test_extract_attr_edge_cases() {
         // Test extraction from complex attributes
         let line = r#"<node text="Value with spaces" resource-id="com.app:id/test" empty="" clickable="true"/>"#;
-        assert_eq!(extract_attr(line, "text"), Some("Value with spaces".to_string()));
-        assert_eq!(extract_attr(line, "resource-id"), Some("com.app:id/test".to_string()));
+        assert_eq!(
+            extract_attr(line, "text"),
+            Some("Value with spaces".to_string())
+        );
+        assert_eq!(
+            extract_attr(line, "resource-id"),
+            Some("com.app:id/test".to_string())
+        );
         assert_eq!(extract_attr(line, "empty"), Some("".to_string()));
         assert_eq!(extract_attr(line, "clickable"), Some("true".to_string()));
 

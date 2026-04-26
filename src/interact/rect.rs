@@ -3,8 +3,8 @@
 //! Based on original Rect.kt from Kotlin implementation
 
 use super::point::Point;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use serde::{Serialize, Deserialize};
 
 /// A rectangle defined by min/max coordinates
 ///
@@ -102,8 +102,7 @@ impl Rect {
 
     /// Check if a point is inside the rectangle
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
-        x >= self.min_x && x < self.max_x &&
-        y >= self.min_y && y < self.max_y
+        x >= self.min_x && x < self.max_x && y >= self.min_y && y < self.max_y
     }
 
     /// Check if this rect strictly contains another rect
@@ -118,8 +117,10 @@ impl Rect {
 
     /// Check if another rectangle intersects with this one
     pub fn intersects(&self, other: &Rect) -> bool {
-        self.min_x < other.max_x && self.max_x > other.min_x &&
-        self.min_y < other.max_y && self.max_y > other.min_y
+        self.min_x < other.max_x
+            && self.max_x > other.min_x
+            && self.min_y < other.max_y
+            && self.max_y > other.min_y
     }
 
     /// Get the intersection of two rectangles
@@ -157,10 +158,7 @@ impl Rect {
         let va = [self.min_x, self.min_y, self.max_x, self.max_y];
         let vb = [other.min_x, other.min_y, other.max_x, other.max_y];
 
-        va.iter()
-            .zip(vb.iter())
-            .map(|(a, b)| (a - b).pow(2))
-            .sum()
+        va.iter().zip(vb.iter()).map(|(a, b)| (a - b).pow(2)).sum()
     }
 
     /// Calculate neighbor distance (dx, dy between rects)
@@ -222,7 +220,11 @@ impl Rect {
 /// Display trait for toString matching Kotlin format "[minX,minY][maxX,maxY]"
 impl fmt::Display for Rect {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{},{}][{},{}]", self.min_x, self.min_y, self.max_x, self.max_y)
+        write!(
+            f,
+            "[{},{}][{},{}]",
+            self.min_x, self.min_y, self.max_x, self.max_y
+        )
     }
 }
 

@@ -1,8 +1,8 @@
-use std::path::Path;
-use std::fs;
-use std::collections::HashMap;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use regex::Regex;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 /// Template processor for device configuration
 pub struct TemplateProcessor {
@@ -32,8 +32,7 @@ impl TemplateProcessor {
         let mut result = content.to_string();
 
         // Replace {{variable}} patterns
-        let re = Regex::new(r"\{\{(\w+)\}\}")
-            .context("Failed to create regex")?;
+        let re = Regex::new(r"\{\{(\w+)\}\}").context("Failed to create regex")?;
 
         for cap in re.captures_iter(content) {
             if let Some(var_name) = cap.get(1) {
@@ -45,16 +44,16 @@ impl TemplateProcessor {
         }
 
         // Replace ${variable} patterns
-        let re2 = Regex::new(r"\$\{(\w+)\}")
-            .context("Failed to create regex")?;
+        let re2 = Regex::new(r"\$\{(\w+)\}").context("Failed to create regex")?;
 
-        let replacements: Vec<(String, String)> = re2.captures_iter(&result)
+        let replacements: Vec<(String, String)> = re2
+            .captures_iter(&result)
             .filter_map(|cap| {
                 cap.get(1).and_then(|var_name| {
                     let name = var_name.as_str();
-                    self.variables.get(name).map(|value| {
-                        (format!("${{{}}}", name), value.clone())
-                    })
+                    self.variables
+                        .get(name)
+                        .map(|value| (format!("${{{}}}", name), value.clone()))
                 })
             })
             .collect();
@@ -81,7 +80,11 @@ impl TemplateProcessor {
         fs::write(output_path, processed)
             .with_context(|| format!("Failed to write output: {}", output_path.display()))?;
 
-        println!("Processed: {} -> {}", template_path.display(), output_path.display());
+        println!(
+            "Processed: {} -> {}",
+            template_path.display(),
+            output_path.display()
+        );
 
         Ok(())
     }
@@ -99,16 +102,17 @@ impl TemplateProcessor {
                 self.process_dir(&src_path, &dst_path)?;
             } else {
                 // Process file if it looks like a template
-                let ext = src_path.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+                let ext = src_path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
                 if ext == "template" || ext == "tpl" || ext.ends_with(".template") {
                     // Remove template extension
-                    let new_name = dst_path.file_name()
+                    let new_name = dst_path
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .map(|n| n.replace(".template", "").replace(".tpl", ""))
-                        .unwrap_or_else(|| dst_path.file_name().unwrap().to_string_lossy().to_string());
+                        .unwrap_or_else(|| {
+                            dst_path.file_name().unwrap().to_string_lossy().to_string()
+                        });
 
                     let final_path = dst_path.parent().unwrap().join(new_name);
                     self.process_file(&src_path, &final_path)?;
@@ -143,65 +147,91 @@ impl DeviceTemplates {
             ("wear_round", "Wear OS Round - 320x320, API 30"),
             ("generic_phone", "Generic Phone - 480x800, API 28"),
             ("generic_tablet_7", "Generic Tablet 7\" - 800x1280, API 28"),
-            ("generic_tablet_10", "Generic Tablet 10\" - 1280x800, API 28"),
+            (
+                "generic_tablet_10",
+                "Generic Tablet 10\" - 1280x800, API 28",
+            ),
         ]
     }
 
     /// Get template config for device
     pub fn get_config(name: &str) -> Option<HashMap<String, String>> {
         let configs: HashMap<&str, HashMap<&str, &str>> = [
-            ("pixel_6", HashMap::from([
-                ("device", "pixel_6"),
-                ("display_width", "1080"),
-                ("display_height", "2400"),
-                ("density", "420"),
-                ("api_level", "33"),
-                ("ram", "8192"),
-            ])),
-            ("pixel_6_pro", HashMap::from([
-                ("device", "pixel_6_pro"),
-                ("display_width", "1440"),
-                ("display_height", "3120"),
-                ("density", "560"),
-                ("api_level", "33"),
-                ("ram", "12288"),
-            ])),
-            ("pixel_5", HashMap::from([
-                ("device", "pixel_5"),
-                ("display_width", "1080"),
-                ("display_height", "2340"),
-                ("density", "440"),
-                ("api_level", "31"),
-                ("ram", "8192"),
-            ])),
-            ("nexus_6", HashMap::from([
-                ("device", "nexus_6"),
-                ("display_width", "2560"),
-                ("display_height", "1440"),
-                ("density", "560"),
-                ("api_level", "23"),
-                ("ram", "3072"),
-            ])),
-            ("generic_phone", HashMap::from([
-                ("device", "generic"),
-                ("display_width", "480"),
-                ("display_height", "800"),
-                ("density", "240"),
-                ("api_level", "28"),
-                ("ram", "2048"),
-            ])),
-            ("generic_tablet_7", HashMap::from([
-                ("device", "generic_tablet"),
-                ("display_width", "800"),
-                ("display_height", "1280"),
-                ("density", "160"),
-                ("api_level", "28"),
-                ("ram", "4096"),
-            ])),
-        ].iter().cloned().collect();
+            (
+                "pixel_6",
+                HashMap::from([
+                    ("device", "pixel_6"),
+                    ("display_width", "1080"),
+                    ("display_height", "2400"),
+                    ("density", "420"),
+                    ("api_level", "33"),
+                    ("ram", "8192"),
+                ]),
+            ),
+            (
+                "pixel_6_pro",
+                HashMap::from([
+                    ("device", "pixel_6_pro"),
+                    ("display_width", "1440"),
+                    ("display_height", "3120"),
+                    ("density", "560"),
+                    ("api_level", "33"),
+                    ("ram", "12288"),
+                ]),
+            ),
+            (
+                "pixel_5",
+                HashMap::from([
+                    ("device", "pixel_5"),
+                    ("display_width", "1080"),
+                    ("display_height", "2340"),
+                    ("density", "440"),
+                    ("api_level", "31"),
+                    ("ram", "8192"),
+                ]),
+            ),
+            (
+                "nexus_6",
+                HashMap::from([
+                    ("device", "nexus_6"),
+                    ("display_width", "2560"),
+                    ("display_height", "1440"),
+                    ("density", "560"),
+                    ("api_level", "23"),
+                    ("ram", "3072"),
+                ]),
+            ),
+            (
+                "generic_phone",
+                HashMap::from([
+                    ("device", "generic"),
+                    ("display_width", "480"),
+                    ("display_height", "800"),
+                    ("density", "240"),
+                    ("api_level", "28"),
+                    ("ram", "2048"),
+                ]),
+            ),
+            (
+                "generic_tablet_7",
+                HashMap::from([
+                    ("device", "generic_tablet"),
+                    ("display_width", "800"),
+                    ("display_height", "1280"),
+                    ("density", "160"),
+                    ("api_level", "28"),
+                    ("ram", "4096"),
+                ]),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         configs.get(name).map(|c| {
-            c.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+            c.iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
         })
     }
 }
@@ -284,7 +314,9 @@ mod tests {
 
         let mut processor = TemplateProcessor::new();
         processor.set("name", "World");
-        processor.process_file(&template_file, &output_file).unwrap();
+        processor
+            .process_file(&template_file, &output_file)
+            .unwrap();
 
         let result = fs::read_to_string(&output_file).unwrap();
         assert_eq!(result, "Hello World!");

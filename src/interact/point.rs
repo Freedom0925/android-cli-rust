@@ -54,10 +54,7 @@ impl Point {
 
     /// Get midpoint between two points
     pub fn midpoint(&self, other: &Point) -> Point {
-        Point::new(
-            (self.x + other.x) / 2,
-            (self.y + other.y) / 2,
-        )
+        Point::new((self.x + other.x) / 2, (self.y + other.y) / 2)
     }
 
     /// Check if point is inside a rectangle

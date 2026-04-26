@@ -2,9 +2,9 @@
 //!
 //! Based on Kotlin SkillsInstallLocation enum
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Skills installation location for different AI agents
 ///
@@ -411,21 +411,36 @@ mod tests {
 
     #[test]
     fn test_agent_names() {
-        assert_eq!(SkillsInstallLocation::ClaudeCode.agent_name(), "claude-code");
+        assert_eq!(
+            SkillsInstallLocation::ClaudeCode.agent_name(),
+            "claude-code"
+        );
         assert_eq!(SkillsInstallLocation::Gemini.agent_name(), "gemini");
         assert_eq!(SkillsInstallLocation::Cursor.agent_name(), "cursor");
     }
 
     #[test]
     fn test_global_paths() {
-        assert_eq!(SkillsInstallLocation::ClaudeCode.global_path(), ".claude/skills/");
-        assert_eq!(SkillsInstallLocation::Gemini.global_path(), ".gemini/skills/");
+        assert_eq!(
+            SkillsInstallLocation::ClaudeCode.global_path(),
+            ".claude/skills/"
+        );
+        assert_eq!(
+            SkillsInstallLocation::Gemini.global_path(),
+            ".gemini/skills/"
+        );
     }
 
     #[test]
     fn test_project_paths() {
-        assert_eq!(SkillsInstallLocation::ClaudeCode.project_path(), ".claude/skills/");
-        assert_eq!(SkillsInstallLocation::Codex.project_path(), ".agents/skills/");
+        assert_eq!(
+            SkillsInstallLocation::ClaudeCode.project_path(),
+            ".claude/skills/"
+        );
+        assert_eq!(
+            SkillsInstallLocation::Codex.project_path(),
+            ".agents/skills/"
+        );
     }
 
     #[test]
@@ -434,10 +449,7 @@ mod tests {
             SkillsInstallLocation::from_agent_name("claude-code"),
             Some(SkillsInstallLocation::ClaudeCode)
         );
-        assert_eq!(
-            SkillsInstallLocation::from_agent_name("invalid"),
-            None
-        );
+        assert_eq!(SkillsInstallLocation::from_agent_name("invalid"), None);
     }
 
     #[test]

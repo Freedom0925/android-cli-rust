@@ -69,7 +69,8 @@ impl DescribeCLI {
 
     /// Analyze Android project structure
     pub fn analyze_project(&self, project_dir: &Path) -> Result<ProjectDescription> {
-        let root_dir = project_dir.canonicalize()
+        let root_dir = project_dir
+            .canonicalize()
             .with_context(|| format!("Invalid project directory: {}", project_dir.display()))?;
 
         // Detect Gradle version
@@ -82,7 +83,11 @@ impl DescribeCLI {
         let modules = self.discover_modules(&root_dir)?;
 
         // Default output directory
-        let default_output_dir = root_dir.join("app").join("build").join("outputs").join("apk");
+        let default_output_dir = root_dir
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk");
         let default_output_dir = default_output_dir.to_string_lossy().to_string();
 
         Ok(ProjectDescription {
@@ -116,7 +121,11 @@ impl DescribeCLI {
                         let version = filename
                             .strip_prefix("gradle-")
                             .and_then(|s| s.strip_suffix("-bin.zip"))
-                            .or_else(|| filename.strip_prefix("gradle-").and_then(|s| s.strip_suffix("-all.zip")));
+                            .or_else(|| {
+                                filename
+                                    .strip_prefix("gradle-")
+                                    .and_then(|s| s.strip_suffix("-all.zip"))
+                            });
                         return Ok(version.map(|v| v.to_string()));
                     }
                 }
@@ -127,7 +136,10 @@ impl DescribeCLI {
     }
 
     /// Parse root build.gradle for AGP and Kotlin versions
-    fn parse_root_build_gradle(&self, project_dir: &Path) -> Result<(Option<String>, Option<String>)> {
+    fn parse_root_build_gradle(
+        &self,
+        project_dir: &Path,
+    ) -> Result<(Option<String>, Option<String>)> {
         let build_gradle = project_dir.join("build.gradle");
         let build_gradle_kts = project_dir.join("build.gradle.kts");
 
@@ -157,7 +169,8 @@ impl DescribeCLI {
 
             // Kotlin patterns
             if line.contains("org.jetbrains.kotlin:kotlin-gradle-plugin:") {
-                kotlin_version = self.extract_version_after(line, "org.jetbrains.kotlin:kotlin-gradle-plugin:");
+                kotlin_version =
+                    self.extract_version_after(line, "org.jetbrains.kotlin:kotlin-gradle-plugin:");
             } else if line.contains("kotlin(\"jvm\")") && line.contains("version") {
                 kotlin_version = self.extract_version_from_version_field(line);
             } else if line.contains("org.jetbrains.kotlin.jvm") && line.contains("version") {
@@ -210,7 +223,12 @@ impl DescribeCLI {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() && !path.file_name().map(|n| n.to_string_lossy().starts_with('.')).unwrap_or(false) {
+            if path.is_dir()
+                && !path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().starts_with('.'))
+                    .unwrap_or(false)
+            {
                 let name = path.file_name().unwrap().to_string_lossy().to_string();
 
                 // Skip common non-module directories
@@ -219,7 +237,8 @@ impl DescribeCLI {
                 }
 
                 // Check for build.gradle or build.gradle.kts
-                let has_gradle = path.join("build.gradle").exists() || path.join("build.gradle.kts").exists();
+                let has_gradle =
+                    path.join("build.gradle").exists() || path.join("build.gradle.kts").exists();
 
                 if has_gradle || settings_modules.contains(&name) {
                     if let Some(module_info) = self.analyze_module(&path)? {
@@ -230,11 +249,20 @@ impl DescribeCLI {
         }
 
         // Check if root is also a module (has build.gradle)
-        if project_dir.join("build.gradle").exists() || project_dir.join("build.gradle.kts").exists() {
+        if project_dir.join("build.gradle").exists()
+            || project_dir.join("build.gradle.kts").exists()
+        {
             // Root module may have been skipped, add it
-            if !modules.iter().any(|m| m.path == project_dir.to_string_lossy()) {
+            if !modules
+                .iter()
+                .any(|m| m.path == project_dir.to_string_lossy())
+            {
                 // For root, check manifest in app/src/main/
-                let manifest_path = project_dir.join("app").join("src").join("main").join("AndroidManifest.xml");
+                let manifest_path = project_dir
+                    .join("app")
+                    .join("src")
+                    .join("main")
+                    .join("AndroidManifest.xml");
                 if manifest_path.exists() {
                     if let Some(mut module_info) = self.analyze_module(project_dir)? {
                         module_info.name = "root".to_string();
@@ -291,7 +319,8 @@ impl DescribeCLI {
             return Ok(None);
         }
 
-        let name = module_dir.file_name()
+        let name = module_dir
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string());
 
@@ -302,7 +331,9 @@ impl DescribeCLI {
         };
 
         // Detect module type
-        let module_type = if content.contains("com.android.application") || content.contains("'com.android.application'") {
+        let module_type = if content.contains("com.android.application")
+            || content.contains("'com.android.application'")
+        {
             ModuleType::Application
         } else if content.contains("com.android.dynamic-feature") {
             ModuleType::DynamicFeature
@@ -311,7 +342,10 @@ impl DescribeCLI {
         };
 
         // Extract package info from manifest
-        let manifest_path = module_dir.join("src").join("main").join("AndroidManifest.xml");
+        let manifest_path = module_dir
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
         let (package_name, application_id) = self.parse_manifest(&manifest_path, &content)?;
 
         // Extract SDK versions
@@ -337,7 +371,11 @@ impl DescribeCLI {
     }
 
     /// Parse AndroidManifest.xml for package info
-    fn parse_manifest(&self, manifest_path: &Path, build_gradle_content: &str) -> Result<(Option<String>, Option<String>)> {
+    fn parse_manifest(
+        &self,
+        manifest_path: &Path,
+        build_gradle_content: &str,
+    ) -> Result<(Option<String>, Option<String>)> {
         let mut package_name = None;
         let mut application_id = None;
 
@@ -395,7 +433,10 @@ impl DescribeCLI {
             if trimmed.starts_with("android") && trimmed.ends_with('{') {
                 in_android_block = true;
                 brace_count.set(0);
-            } else if trimmed.starts_with("defaultConfig") && trimmed.ends_with('{') && in_android_block {
+            } else if trimmed.starts_with("defaultConfig")
+                && trimmed.ends_with('{')
+                && in_android_block
+            {
                 in_default_config = true;
             }
 
@@ -463,7 +504,11 @@ impl DescribeCLI {
             if in_build_types || in_flavors {
                 // Extract block name like "debug {" or "release {"
                 if trimmed.ends_with('{') {
-                    let name = trimmed.trim_end_matches('{').trim().trim_end_matches('"').trim_end_matches('\'');
+                    let name = trimmed
+                        .trim_end_matches('{')
+                        .trim()
+                        .trim_end_matches('"')
+                        .trim_end_matches('\'');
                     if !name.is_empty() {
                         if in_build_types {
                             if !build_types.contains(&name.to_string()) {
@@ -502,7 +547,11 @@ impl DescribeCLI {
     }
 
     /// Find output APK locations
-    fn find_output_apks(&self, module_dir: &Path, variants: &[BuildVariant]) -> HashMap<String, Vec<ApkLocation>> {
+    fn find_output_apks(
+        &self,
+        module_dir: &Path,
+        variants: &[BuildVariant],
+    ) -> HashMap<String, Vec<ApkLocation>> {
         let mut apks = HashMap::new();
         let build_dir = module_dir.join("build").join("outputs").join("apk");
 
@@ -552,7 +601,15 @@ impl DescribeCLI {
         println!("Installed SDK packages:");
         println!();
 
-        let dirs = ["build-tools", "platforms", "platform-tools", "emulator", "cmdline-tools", "ndk", "cmake"];
+        let dirs = [
+            "build-tools",
+            "platforms",
+            "platform-tools",
+            "emulator",
+            "cmdline-tools",
+            "ndk",
+            "cmake",
+        ];
 
         for dir in &dirs {
             let path = sdk_path.join(dir);
@@ -692,7 +749,9 @@ zipStorePath=wrapper/dists
         fs::write(&wrapper_props, content).expect("Failed to write properties");
 
         let cli = DescribeCLI::new(None);
-        let version = cli.detect_gradle_version(temp_dir.path()).expect("Failed to detect version");
+        let version = cli
+            .detect_gradle_version(temp_dir.path())
+            .expect("Failed to detect version");
 
         assert_eq!(version, Some("8.4".to_string()));
     }
@@ -710,7 +769,9 @@ zipStorePath=wrapper/dists
         fs::write(&wrapper_props, content).expect("Failed to write properties");
 
         let cli = DescribeCLI::new(None);
-        let version = cli.detect_gradle_version(temp_dir.path()).expect("Failed to detect version");
+        let version = cli
+            .detect_gradle_version(temp_dir.path())
+            .expect("Failed to detect version");
 
         assert_eq!(version, Some("7.6".to_string()));
     }
@@ -720,7 +781,9 @@ zipStorePath=wrapper/dists
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
 
         let cli = DescribeCLI::new(None);
-        let version = cli.detect_gradle_version(temp_dir.path()).expect("Failed to detect version");
+        let version = cli
+            .detect_gradle_version(temp_dir.path())
+            .expect("Failed to detect version");
 
         assert!(version.is_none());
     }
@@ -746,7 +809,9 @@ buildscript {
         fs::write(&build_gradle, content).expect("Failed to write build.gradle");
 
         let cli = DescribeCLI::new(None);
-        let (agp, kotlin) = cli.parse_root_build_gradle(temp_dir.path()).expect("Failed to parse");
+        let (agp, kotlin) = cli
+            .parse_root_build_gradle(temp_dir.path())
+            .expect("Failed to parse");
 
         assert_eq!(agp, Some("8.1.0".to_string()));
         assert_eq!(kotlin, Some("1.9.0".to_string()));
@@ -767,7 +832,9 @@ plugins {
         fs::write(&build_gradle_kts, content).expect("Failed to write build.gradle.kts");
 
         let cli = DescribeCLI::new(None);
-        let (agp, kotlin) = cli.parse_root_build_gradle(temp_dir.path()).expect("Failed to parse");
+        let (agp, kotlin) = cli
+            .parse_root_build_gradle(temp_dir.path())
+            .expect("Failed to parse");
 
         assert_eq!(agp, Some("8.2.0".to_string()));
         assert_eq!(kotlin, Some("1.9.20".to_string()));
@@ -778,7 +845,9 @@ plugins {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
 
         let cli = DescribeCLI::new(None);
-        let (agp, kotlin) = cli.parse_root_build_gradle(temp_dir.path()).expect("Failed to parse");
+        let (agp, kotlin) = cli
+            .parse_root_build_gradle(temp_dir.path())
+            .expect("Failed to parse");
 
         assert!(agp.is_none());
         assert!(kotlin.is_none());
@@ -798,7 +867,9 @@ plugins {
         fs::write(&build_gradle, content).expect("Failed to write build.gradle");
 
         let cli = DescribeCLI::new(None);
-        let result = cli.analyze_module(temp_dir.path()).expect("Failed to analyze");
+        let result = cli
+            .analyze_module(temp_dir.path())
+            .expect("Failed to analyze");
 
         assert!(result.is_some());
         let module_info = result.unwrap();
@@ -819,7 +890,9 @@ plugins {
         fs::write(&build_gradle, content).expect("Failed to write build.gradle");
 
         let cli = DescribeCLI::new(None);
-        let result = cli.analyze_module(temp_dir.path()).expect("Failed to analyze");
+        let result = cli
+            .analyze_module(temp_dir.path())
+            .expect("Failed to analyze");
 
         assert!(result.is_some());
         let module_info = result.unwrap();
@@ -840,11 +913,16 @@ plugins {
         fs::write(&build_gradle, content).expect("Failed to write build.gradle");
 
         let cli = DescribeCLI::new(None);
-        let result = cli.analyze_module(temp_dir.path()).expect("Failed to analyze");
+        let result = cli
+            .analyze_module(temp_dir.path())
+            .expect("Failed to analyze");
 
         assert!(result.is_some());
         let module_info = result.unwrap();
-        assert!(matches!(module_info.module_type, ModuleType::DynamicFeature));
+        assert!(matches!(
+            module_info.module_type,
+            ModuleType::DynamicFeature
+        ));
     }
 
     #[test]
@@ -859,7 +937,9 @@ apply plugin: 'com.android.application'
         fs::write(&build_gradle, content).expect("Failed to write build.gradle");
 
         let cli = DescribeCLI::new(None);
-        let result = cli.analyze_module(temp_dir.path()).expect("Failed to analyze");
+        let result = cli
+            .analyze_module(temp_dir.path())
+            .expect("Failed to analyze");
 
         assert!(result.is_some());
         let module_info = result.unwrap();
@@ -872,10 +952,13 @@ apply plugin: 'com.android.application'
 
         // Create module structure
         let build_gradle = temp_dir.path().join("build.gradle");
-        fs::write(&build_gradle, "plugins { id('com.android.application') }").expect("Failed to write");
+        fs::write(&build_gradle, "plugins { id('com.android.application') }")
+            .expect("Failed to write");
 
         let cli = DescribeCLI::new(None);
-        let result = cli.analyze_module(temp_dir.path()).expect("Failed to analyze");
+        let result = cli
+            .analyze_module(temp_dir.path())
+            .expect("Failed to analyze");
 
         assert!(result.is_some());
         let module_info = result.unwrap();
@@ -890,10 +973,16 @@ apply plugin: 'com.android.application'
 
         // Create module with build output structure
         let build_gradle = temp_dir.path().join("build.gradle");
-        fs::write(&build_gradle, "plugins { id('com.android.application') }").expect("Failed to write");
+        fs::write(&build_gradle, "plugins { id('com.android.application') }")
+            .expect("Failed to write");
 
         // Create APK output directory
-        let debug_dir = temp_dir.path().join("build").join("outputs").join("apk").join("debug");
+        let debug_dir = temp_dir
+            .path()
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("debug");
         fs::create_dir_all(&debug_dir).expect("Failed to create debug dir");
 
         // Create a dummy APK file
@@ -923,13 +1012,11 @@ apply plugin: 'com.android.application'
             module_type: ModuleType::Application,
             package_name: Some("com.example.app".to_string()),
             application_id: Some("com.example.app".to_string()),
-            build_variants: vec![
-                BuildVariant {
-                    name: "debug".to_string(),
-                    build_type: "debug".to_string(),
-                    flavors: vec![],
-                },
-            ],
+            build_variants: vec![BuildVariant {
+                name: "debug".to_string(),
+                build_type: "debug".to_string(),
+                flavors: vec![],
+            }],
             min_sdk: Some(21),
             target_sdk: Some(34),
             output_apks: HashMap::new(),
@@ -963,7 +1050,8 @@ apply plugin: 'com.android.application'
         assert!(json.contains("\"kotlin_version\":\"1.9.0\""));
 
         // Deserialize back
-        let deserialized: ProjectDescription = serde_json::from_str(&json).expect("Failed to deserialize");
+        let deserialized: ProjectDescription =
+            serde_json::from_str(&json).expect("Failed to deserialize");
         assert_eq!(deserialized.gradle_version, Some("8.4".to_string()));
     }
 
@@ -979,7 +1067,8 @@ apply plugin: 'com.android.application'
         assert!(json.contains("\"name\":\"freeDebug\""));
         assert!(json.contains("\"build_type\":\"debug\""));
 
-        let deserialized: BuildVariant = serde_json::from_str(&json).expect("Failed to deserialize");
+        let deserialized: BuildVariant =
+            serde_json::from_str(&json).expect("Failed to deserialize");
         assert_eq!(deserialized.name, "freeDebug");
         assert_eq!(deserialized.flavors, vec!["free"]);
     }
@@ -1100,13 +1189,17 @@ android {
 
         // The parser detects "free" but may miss "paid" due to brace reset bug
         // Verify we have flavor-based variants for what was detected
-        assert!(variants.iter().any(|v| v.name.contains("Debug") || v.name.contains("Release")));
+        assert!(variants
+            .iter()
+            .any(|v| v.name.contains("Debug") || v.name.contains("Release")));
 
         // At minimum, verify that flavors are combined when detected
         let flavor_variants = variants.iter().filter(|v| !v.flavors.is_empty()).count();
         // If flavors were detected, we should have flavor-based variants
         if flavor_variants > 0 {
-            assert!(variants.iter().any(|v| v.flavors.contains(&"free".to_string())));
+            assert!(variants
+                .iter()
+                .any(|v| v.flavors.contains(&"free".to_string())));
         }
     }
 
@@ -1132,7 +1225,9 @@ include ':feature2'
         fs::write(&settings, content).expect("Failed to write settings.gradle");
 
         let cli = DescribeCLI::new(None);
-        let modules = cli.parse_settings_gradle(temp_dir.path()).expect("Failed to parse");
+        let modules = cli
+            .parse_settings_gradle(temp_dir.path())
+            .expect("Failed to parse");
 
         assert!(modules.contains(&"app".to_string()));
         assert!(modules.contains(&"feature1".to_string()));
@@ -1151,7 +1246,9 @@ include(":feature1")
         fs::write(&settings, content).expect("Failed to write settings.gradle.kts");
 
         let cli = DescribeCLI::new(None);
-        let modules = cli.parse_settings_gradle(temp_dir.path()).expect("Failed to parse");
+        let modules = cli
+            .parse_settings_gradle(temp_dir.path())
+            .expect("Failed to parse");
 
         assert!(!modules.is_empty());
     }
@@ -1174,7 +1271,9 @@ include(":feature1")
         fs::write(&manifest, content).expect("Failed to write manifest");
 
         let cli = DescribeCLI::new(None);
-        let (package_name, _) = cli.parse_manifest(&manifest, "").expect("Failed to parse manifest");
+        let (package_name, _) = cli
+            .parse_manifest(&manifest, "")
+            .expect("Failed to parse manifest");
 
         assert_eq!(package_name, Some("com.example.test".to_string()));
     }
@@ -1188,8 +1287,11 @@ include(":feature1")
         fs::create_dir_all(&wrapper_dir).expect("Failed to create wrapper dir");
 
         let wrapper_props = wrapper_dir.join("gradle-wrapper.properties");
-        fs::write(&wrapper_props, "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0-bin.zip")
-            .expect("Failed to write properties");
+        fs::write(
+            &wrapper_props,
+            "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.0-bin.zip",
+        )
+        .expect("Failed to write properties");
 
         let build_gradle = temp_dir.path().join("build.gradle");
         fs::write(&build_gradle, "buildscript { repositories { google() } }")

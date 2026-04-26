@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
+use anyhow::{Context, Result};
+use sha1::{Digest, Sha1};
 use std::fs;
-use std::io::{Read, BufReader};
-use sha1::{Sha1, Digest};
-use anyhow::{Result, Context};
+use std::io::{BufReader, Read};
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::sdk::model::Sdk;
@@ -38,12 +38,24 @@ impl Storage {
 
     /// Ensure all directories exist
     fn ensure_dirs(&self) -> Result<()> {
-        fs::create_dir_all(&self.objects_dir)
-            .with_context(|| format!("Failed to create objects dir: {}", self.objects_dir.display()))?;
-        fs::create_dir_all(&self.archives_dir)
-            .with_context(|| format!("Failed to create archives dir: {}", self.archives_dir.display()))?;
-        fs::create_dir_all(&self.unzipped_dir)
-            .with_context(|| format!("Failed to create unzipped dir: {}", self.unzipped_dir.display()))?;
+        fs::create_dir_all(&self.objects_dir).with_context(|| {
+            format!(
+                "Failed to create objects dir: {}",
+                self.objects_dir.display()
+            )
+        })?;
+        fs::create_dir_all(&self.archives_dir).with_context(|| {
+            format!(
+                "Failed to create archives dir: {}",
+                self.archives_dir.display()
+            )
+        })?;
+        fs::create_dir_all(&self.unzipped_dir).with_context(|| {
+            format!(
+                "Failed to create unzipped dir: {}",
+                self.unzipped_dir.display()
+            )
+        })?;
         fs::create_dir_all(&self.refs_dir)
             .with_context(|| format!("Failed to create refs dir: {}", self.refs_dir.display()))?;
         Ok(())
@@ -136,7 +148,10 @@ impl Storage {
         #[cfg(debug_assertions)]
         eprintln!("DEBUG: unzip - unzipped_path={}", unzipped_path.display());
         #[cfg(debug_assertions)]
-        eprintln!("DEBUG: unzip - unzipped_dir={}", self.unzipped_dir.display());
+        eprintln!(
+            "DEBUG: unzip - unzipped_dir={}",
+            self.unzipped_dir.display()
+        );
 
         // Check if already unzipped with content
         if unzipped_path.exists() {
@@ -151,12 +166,20 @@ impl Storage {
         }
 
         // Ensure parent directory exists
-        fs::create_dir_all(&self.unzipped_dir)
-            .with_context(|| format!("Failed to create unzipped_dir: {}", self.unzipped_dir.display()))?;
+        fs::create_dir_all(&self.unzipped_dir).with_context(|| {
+            format!(
+                "Failed to create unzipped_dir: {}",
+                self.unzipped_dir.display()
+            )
+        })?;
 
         // Create target directory
-        fs::create_dir_all(&unzipped_path)
-            .with_context(|| format!("Failed to create unzipped_path: {}", unzipped_path.display()))?;
+        fs::create_dir_all(&unzipped_path).with_context(|| {
+            format!(
+                "Failed to create unzipped_path: {}",
+                unzipped_path.display()
+            )
+        })?;
 
         let file = fs::File::open(&archive_path)
             .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
@@ -306,7 +329,7 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sdk::model::{SdkEntry, Revision};
+    use crate::sdk::model::{Revision, SdkEntry};
     use tempfile::tempdir;
 
     #[test]
@@ -314,9 +337,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let storage = Storage::new(dir.path().to_path_buf()).unwrap();
 
-        let sdk = Sdk::with_entries(vec![
-            SdkEntry::new("build-tools".to_string(), Revision::parse("34.0.0").unwrap()),
-        ]);
+        let sdk = Sdk::with_entries(vec![SdkEntry::new(
+            "build-tools".to_string(),
+            Revision::parse("34.0.0").unwrap(),
+        )]);
 
         let sha = storage.save_sdk(&sdk).unwrap();
         assert!(!sha.is_empty());

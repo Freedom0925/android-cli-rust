@@ -1,88 +1,54 @@
-use image::{DynamicImage, Rgba, ImageBuffer, GenericImage};
 use anyhow::Result;
+use image::{DynamicImage, GenericImage, ImageBuffer, Rgba};
 
 /// Digit patterns for drawing numbers (5x3 bitmap patterns)
 /// Each digit is represented as a 5-row, 3-column pattern
 const DIGIT_PATTERNS: [[bool; 15]; 10] = [
     // 0
     [
-        true, true, true,
-        true, false, true,
-        true, false, true,
-        true, false, true,
-        true, true, true,
+        true, true, true, true, false, true, true, false, true, true, false, true, true, true, true,
     ],
     // 1
     [
-        false, true, false,
-        true, true, false,
-        false, true, false,
-        false, true, false,
-        true, true, true,
+        false, true, false, true, true, false, false, true, false, false, true, false, true, true,
+        true,
     ],
     // 2
     [
-        true, true, true,
-        false, false, true,
-        true, true, true,
-        true, false, false,
-        true, true, true,
+        true, true, true, false, false, true, true, true, true, true, false, false, true, true,
+        true,
     ],
     // 3
     [
-        true, true, true,
-        false, false, true,
-        true, true, true,
-        false, false, true,
-        true, true, true,
+        true, true, true, false, false, true, true, true, true, false, false, true, true, true,
+        true,
     ],
     // 4
     [
-        true, false, true,
-        true, false, true,
-        true, true, true,
-        false, false, true,
-        false, false, true,
+        true, false, true, true, false, true, true, true, true, false, false, true, false, false,
+        true,
     ],
     // 5
     [
-        true, true, true,
-        true, false, false,
-        true, true, true,
-        false, false, true,
-        true, true, true,
+        true, true, true, true, false, false, true, true, true, false, false, true, true, true,
+        true,
     ],
     // 6
     [
-        true, true, true,
-        true, false, false,
-        true, true, true,
-        true, false, true,
-        true, true, true,
+        true, true, true, true, false, false, true, true, true, true, false, true, true, true, true,
     ],
     // 7
     [
-        true, true, true,
-        false, false, true,
-        false, true, false,
-        true, false, false,
-        true, false, false,
+        true, true, true, false, false, true, false, true, false, true, false, false, true, false,
+        false,
     ],
     // 8
     [
-        true, true, true,
-        true, false, true,
-        true, true, true,
-        true, false, true,
-        true, true, true,
+        true, true, true, true, false, true, true, true, true, true, false, true, true, true, true,
     ],
     // 9
     [
-        true, true, true,
-        true, false, true,
-        true, true, true,
-        false, false, true,
-        true, true, true,
+        true, true, true, true, false, true, true, true, true, false, false, true, true, true, true,
     ],
 ];
 
@@ -146,7 +112,8 @@ impl Digits {
         let mut spacing = 0i32;
 
         for digit_char in digits_str.chars() {
-            let digit = digit_char.to_digit(10)
+            let digit = digit_char
+                .to_digit(10)
                 .ok_or_else(|| anyhow::anyhow!("Invalid digit character"))?;
 
             Self::draw_digit_on_buffer(img, x + spacing, y, digit, color, scale)?;
@@ -160,7 +127,11 @@ impl Digits {
 
     /// Get the width needed to draw a number
     pub fn get_number_width(number: u32, scale: u32) -> u32 {
-        let digit_count = if number == 0 { 1 } else { number.to_string().len() as u32 };
+        let digit_count = if number == 0 {
+            1
+        } else {
+            number.to_string().len() as u32
+        };
         // Each digit: 3*scale width, plus scale spacing between digits
         // Total: digit_count * 3*scale + (digit_count - 1) * scale
         // For single digit: 3*scale + scale (extra padding) = 4*scale

@@ -2,18 +2,18 @@
 //!
 //! Based on Kotlin UIElement.java and LayoutCommand.kt
 
-use std::path::PathBuf;
-use std::process::Command;
-use std::fs;
-use anyhow::{Result, Context, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
 
 pub mod key;
 pub mod serializer;
 
 pub use key::Key;
-pub use serializer::{ElementSerializer, ElementDiffSerializer, DiffSummary};
+pub use serializer::{DiffSummary, ElementDiffSerializer, ElementSerializer};
 
 // Import Region trait from interact module
 use crate::interact::Region;
@@ -21,7 +21,12 @@ use crate::vision::Rect;
 
 /// Interaction attributes (matches Kotlin UIElement.interactionAttrs)
 const INTERACTION_ATTRS: [&str; 6] = [
-    "checkable", "clickable", "focusable", "scrollable", "long-clickable", "password",
+    "checkable",
+    "clickable",
+    "focusable",
+    "scrollable",
+    "long-clickable",
+    "password",
 ];
 
 /// State attributes (matches Kotlin UIElement.stateAttrs)
@@ -113,7 +118,8 @@ impl UiNode {
         }
 
         if !self.resource_id.is_empty() {
-            let duplicates = siblings.iter()
+            let duplicates = siblings
+                .iter()
                 .filter(|s| s.resource_id == self.resource_id)
                 .count();
 
@@ -122,7 +128,9 @@ impl UiNode {
                 let mut dup_index = 0;
                 for (i, sibling) in siblings.iter().enumerate() {
                     if sibling.resource_id == self.resource_id {
-                        if i == sibling_index { break; }
+                        if i == sibling_index {
+                            break;
+                        }
                         dup_index += 1;
                     }
                 }
@@ -156,22 +164,38 @@ impl UiNode {
 
     /// Get text if not empty
     pub fn get_text(&self) -> Option<&str> {
-        if self.text.is_empty() { None } else { Some(&self.text) }
+        if self.text.is_empty() {
+            None
+        } else {
+            Some(&self.text)
+        }
     }
 
     /// Get content description if not empty
     pub fn get_content_desc(&self) -> Option<&str> {
-        if self.content_desc.is_empty() { None } else { Some(&self.content_desc) }
+        if self.content_desc.is_empty() {
+            None
+        } else {
+            Some(&self.content_desc)
+        }
     }
 
     /// Get resource ID if not empty
     pub fn get_resource_id(&self) -> Option<&str> {
-        if self.resource_id.is_empty() { None } else { Some(&self.resource_id) }
+        if self.resource_id.is_empty() {
+            None
+        } else {
+            Some(&self.resource_id)
+        }
     }
 
     /// Get class name if not empty
     pub fn get_class(&self) -> Option<&str> {
-        if self.clazz.is_empty() { None } else { Some(&self.clazz) }
+        if self.clazz.is_empty() {
+            None
+        } else {
+            Some(&self.clazz)
+        }
     }
 
     /// Get center coordinates
@@ -190,7 +214,12 @@ impl UiNode {
         if self.bounds.is_empty() {
             None
         } else {
-            Some((self.bounds.min_x, self.bounds.min_y, self.bounds.max_x, self.bounds.max_y))
+            Some((
+                self.bounds.min_x,
+                self.bounds.min_y,
+                self.bounds.max_x,
+                self.bounds.max_y,
+            ))
         }
     }
 
@@ -211,7 +240,9 @@ impl UiNode {
 }
 
 impl Region for UiNode {
-    fn bounds(&self) -> Rect { self.bounds }
+    fn bounds(&self) -> Rect {
+        self.bounds
+    }
 }
 
 /// Layout dump result
@@ -243,7 +274,9 @@ pub struct LayoutChange {
 
 impl LayoutCommand {
     pub fn new(sdk_path: &PathBuf) -> Result<Self> {
-        Ok(Self { sdk_path: sdk_path.clone() })
+        Ok(Self {
+            sdk_path: sdk_path.clone(),
+        })
     }
 
     fn adb_path(&self) -> PathBuf {
@@ -251,8 +284,16 @@ impl LayoutCommand {
     }
 
     /// Dump UI hierarchy
-    pub fn dump(&self, device: Option<&str>, output: Option<&str>, diff: bool, pretty: bool) -> Result<()> {
-        if let Some(d) = device { validate_device_id(d)?; }
+    pub fn dump(
+        &self,
+        device: Option<&str>,
+        output: Option<&str>,
+        diff: bool,
+        pretty: bool,
+    ) -> Result<()> {
+        if let Some(d) = device {
+            validate_device_id(d)?;
+        }
 
         let device_args: Vec<String> = device
             .map(|d| vec!["-s".to_string(), d.to_string()])
@@ -267,17 +308,30 @@ impl LayoutCommand {
 
         // Execute uiautomator dump
         let mut cmd = Command::new(self.adb_path());
-        for arg in &device_args { cmd.arg(arg); }
-        cmd.args(["shell", "uiautomator", "dump", "--compressed", "/sdcard/window_dump.xml"]);
+        for arg in &device_args {
+            cmd.arg(arg);
+        }
+        cmd.args([
+            "shell",
+            "uiautomator",
+            "dump",
+            "--compressed",
+            "/sdcard/window_dump.xml",
+        ]);
         let result = cmd.output().context("Failed to execute uiautomator dump")?;
 
         if !result.status.success() {
-            bail!("UI dump failed: {}", String::from_utf8_lossy(&result.stderr));
+            bail!(
+                "UI dump failed: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
         }
 
         // Read dump file
         let mut cmd = Command::new(self.adb_path());
-        for arg in &device_args { cmd.arg(arg); }
+        for arg in &device_args {
+            cmd.arg(arg);
+        }
         cmd.args(["shell", "cat", "/sdcard/window_dump.xml"]);
         let xml_output = cmd.output().context("Failed to read dump file")?;
 
@@ -337,9 +391,15 @@ impl LayoutCommand {
         Ok(())
     }
 
-    fn read_previous_dump(&self, device: Option<&str>, device_args: &[String]) -> Result<Option<UiNode>> {
+    fn read_previous_dump(
+        &self,
+        device: Option<&str>,
+        device_args: &[String],
+    ) -> Result<Option<UiNode>> {
         let mut cmd = Command::new(self.adb_path());
-        for arg in device_args { cmd.arg(arg); }
+        for arg in device_args {
+            cmd.arg(arg);
+        }
         cmd.args(["shell", "cat", "/sdcard/window_dump.xml"]);
 
         // Return None if command fails
@@ -365,7 +425,8 @@ impl LayoutCommand {
 /// Build tree recursively from XML (matches Kotlin UIElement.buildTree)
 pub fn build_tree(xml: &str) -> Result<UiNode> {
     // Skip <?xml and <hierarchy> wrapper
-    let node_start = xml.find("<node")
+    let node_start = xml
+        .find("<node")
         .ok_or_else(|| anyhow::anyhow!("No node found in XML"))?;
 
     build_tree_recursive(xml, node_start)
@@ -411,7 +472,8 @@ fn parse_single_element(xml: &str, start: usize) -> Result<(UiNode, usize)> {
     let state = extract_state(&attrs);
 
     // Parse bounds
-    let bounds = attrs.get("bounds")
+    let bounds = attrs
+        .get("bounds")
         .and_then(|b| parse_bounds(b))
         .map(|(min_x, min_y, max_x, max_y)| Rect::new(min_x, min_y, max_x, max_y))
         .unwrap_or(Rect::empty());
@@ -526,7 +588,8 @@ fn parse_attributes(tag: &str) -> Result<HashMap<String, String>> {
 
 /// Extract interactions from attributes
 fn extract_interactions(attrs: &HashMap<String, String>) -> HashSet<String> {
-    INTERACTION_ATTRS.iter()
+    INTERACTION_ATTRS
+        .iter()
         .filter(|&attr| attrs.get::<str>(attr).map(|v| v == "true").unwrap_or(false))
         .map(|s| s.to_string())
         .collect()
@@ -534,7 +597,8 @@ fn extract_interactions(attrs: &HashMap<String, String>) -> HashSet<String> {
 
 /// Extract state from attributes
 fn extract_state(attrs: &HashMap<String, String>) -> HashSet<String> {
-    STATE_ATTRS.iter()
+    STATE_ATTRS
+        .iter()
         .filter(|&attr| attrs.get::<str>(attr).map(|v| v == "true").unwrap_or(false))
         .map(|s| s.to_string())
         .collect()
@@ -556,8 +620,12 @@ fn parse_bounds(bounds: &str) -> Option<(i32, i32, i32, i32)> {
 fn find_tag_end(xml: &str, start: usize) -> Result<usize> {
     let mut pos = start;
     while pos < xml.len() {
-        if xml[pos..].starts_with("/>") { return Ok(pos + 2); }
-        if xml[pos..].starts_with(">") { return Ok(pos + 1); }
+        if xml[pos..].starts_with("/>") {
+            return Ok(pos + 2);
+        }
+        if xml[pos..].starts_with(">") {
+            return Ok(pos + 1);
+        }
         pos += 1;
     }
     bail!("Tag end not found")
@@ -566,7 +634,9 @@ fn find_tag_end(xml: &str, start: usize) -> Result<usize> {
 /// Find end of complete node
 fn find_node_end(xml: &str, start: usize) -> Result<usize> {
     let tag_end = find_tag_end(xml, start)?;
-    if xml[start..tag_end].ends_with("/>") { return Ok(tag_end); }
+    if xml[start..tag_end].ends_with("/>") {
+        return Ok(tag_end);
+    }
 
     let mut pos = tag_end;
     let mut depth = 1;
@@ -574,12 +644,16 @@ fn find_node_end(xml: &str, start: usize) -> Result<usize> {
     while pos < xml.len() {
         if xml[pos..].starts_with("<node") {
             let next_end = find_tag_end(xml, pos)?;
-            if !xml[pos..next_end].ends_with("/>") { depth += 1; }
+            if !xml[pos..next_end].ends_with("/>") {
+                depth += 1;
+            }
             pos = next_end;
         } else if xml[pos..].starts_with("</node>") {
             depth -= 1;
             pos += 7;
-            if depth == 0 { return Ok(pos); }
+            if depth == 0 {
+                return Ok(pos);
+            }
         } else {
             pos += 1;
         }
@@ -637,7 +711,10 @@ mod tests {
         let node2 = node1.clone();
         assert!(node1.has_same_attributes(&node2));
 
-        let node3 = UiNode { text: "Different".to_string(), ..node1.clone() };
+        let node3 = UiNode {
+            text: "Different".to_string(),
+            ..node1.clone()
+        };
         assert!(!node1.has_same_attributes(&node3));
     }
 

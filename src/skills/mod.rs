@@ -1,5 +1,5 @@
-pub mod manager;
 pub mod location;
+pub mod manager;
 
-pub use manager::{SkillManager, Skill, AgentLocation};
 pub use location::SkillsInstallLocation;
+pub use manager::{AgentLocation, Skill, SkillManager};

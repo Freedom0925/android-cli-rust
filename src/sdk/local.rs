@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::fs;
+use crate::sdk::model::{Revision, Sdk, SdkEntry};
 use anyhow::Result;
-use crate::sdk::model::{Sdk, SdkEntry, Revision};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Local SDK scanner - reads installed packages from filesystem
 pub struct LocalSdkScanner {
@@ -47,9 +47,7 @@ impl LocalSdkScanner {
                 continue;
             }
 
-            let name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // Parse version from directory name or source.properties
             let revision = self.parse_version(&path, name);
@@ -89,8 +87,7 @@ impl LocalSdkScanner {
                 for line in content.lines() {
                     if line.starts_with("Pkg.Revision=") {
                         let version = line.split('=').nth(1).unwrap_or(dir_name);
-                        return Revision::parse(version.trim())
-                            .unwrap_or_else(|| Revision::new(0));
+                        return Revision::parse(version.trim()).unwrap_or_else(|| Revision::new(0));
                     }
                 }
             }
@@ -104,29 +101,36 @@ impl LocalSdkScanner {
                 for line in content.lines() {
                     if line.contains("<sdk:major>") {
                         // Extract major version
-                        let major = self.extract_xml_value(line, "sdk:major")
+                        let major = self
+                            .extract_xml_value(line, "sdk:major")
                             .and_then(|v| v.parse::<i32>().ok())
                             .unwrap_or(0);
 
-                        let minor = content.lines()
+                        let minor = content
+                            .lines()
                             .find(|l| l.contains("<sdk:minor>"))
                             .and_then(|l| self.extract_xml_value(l, "sdk:minor"))
                             .and_then(|v| v.parse::<i32>().ok());
 
-                        let micro = content.lines()
+                        let micro = content
+                            .lines()
                             .find(|l| l.contains("<sdk:micro>"))
                             .and_then(|l| self.extract_xml_value(l, "sdk:micro"))
                             .and_then(|v| v.parse::<i32>().ok());
 
-                        return Revision { major, minor, micro, preview: None };
+                        return Revision {
+                            major,
+                            minor,
+                            micro,
+                            preview: None,
+                        };
                     }
                 }
             }
         }
 
         // Fallback: parse from directory name
-        Revision::parse(dir_name)
-            .unwrap_or_else(|| Revision::new(0))
+        Revision::parse(dir_name).unwrap_or_else(|| Revision::new(0))
     }
 
     /// Extract value from XML tag
@@ -166,9 +170,7 @@ impl LocalSdkScanner {
                     let entry = entry?;
                     let path = entry.path();
                     if path.is_dir() {
-                        let name = path.file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("");
+                        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                         let revision = self.parse_version(&path, name);
 
                         match &highest {
@@ -183,9 +185,7 @@ impl LocalSdkScanner {
                 }
             }
 
-            Ok(highest.map(|(name, rev)| {
-                SdkEntry::new(format!("{};{}", parts[0], name), rev)
-            }))
+            Ok(highest.map(|(name, rev)| SdkEntry::new(format!("{};{}", parts[0], name), rev)))
         }
     }
 

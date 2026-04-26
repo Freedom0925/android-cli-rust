@@ -66,25 +66,35 @@ impl SysInfoService {
         match self.platform {
             Platform::Mac => self.user_home.join("Library/Android/sdk"),
             Platform::Linux => self.user_home.join("Android/Sdk"),
-            Platform::Windows => {
-                std::env::var("LOCALAPPDATA")
-                    .map(|p| PathBuf::from(p).join("Android/Sdk"))
-                    .ok()
-                    .unwrap_or_else(|| self.user_home.join("Android/Sdk"))
-            }
+            Platform::Windows => std::env::var("LOCALAPPDATA")
+                .map(|p| PathBuf::from(p).join("Android/Sdk"))
+                .ok()
+                .unwrap_or_else(|| self.user_home.join("Android/Sdk")),
         }
     }
 
     /// Get ADB executable path
     pub fn adb_path(&self, sdk_path: &PathBuf) -> PathBuf {
-        let suffix = if self.platform == Platform::Windows { ".exe" } else { "" };
-        sdk_path.join("platform-tools").join(format!("adb{}", suffix))
+        let suffix = if self.platform == Platform::Windows {
+            ".exe"
+        } else {
+            ""
+        };
+        sdk_path
+            .join("platform-tools")
+            .join(format!("adb{}", suffix))
     }
 
     /// Get emulator executable path
     pub fn emulator_path(&self, sdk_path: &PathBuf) -> PathBuf {
-        let suffix = if self.platform == Platform::Windows { ".exe" } else { "" };
-        sdk_path.join("emulator").join(format!("emulator{}", suffix))
+        let suffix = if self.platform == Platform::Windows {
+            ".exe"
+        } else {
+            ""
+        };
+        sdk_path
+            .join("emulator")
+            .join(format!("emulator{}", suffix))
     }
 
     /// Get CLI storage path (.android/cli/)

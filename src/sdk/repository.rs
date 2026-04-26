@@ -1,6 +1,6 @@
-use anyhow::{Result, Context};
-use crate::sdk::model::{Sdk, SdkEntry, Revision};
 use crate::http::Downloader;
+use crate::sdk::model::{Revision, Sdk, SdkEntry};
+use anyhow::{Context, Result};
 
 /// Release channel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -127,9 +127,10 @@ impl Package {
     /// On macOS aarch64, if no native arm64 archive exists, fallback to x64 (Rosetta)
     pub fn find_archive(&self, platform: Platform, arch: Architecture) -> Option<&Archive> {
         // First try exact match
-        let exact = self.archives.iter().find(|a| {
-            a.host_os == platform && a.host_arch == arch
-        });
+        let exact = self
+            .archives
+            .iter()
+            .find(|a| a.host_os == platform && a.host_arch == arch);
 
         if exact.is_some() {
             return exact;
@@ -137,9 +138,10 @@ impl Package {
 
         // On macOS aarch64, fallback to x64 (can run via Rosetta)
         if platform == Platform::Mac && arch == Architecture::Aarch64 {
-            return self.archives.iter().find(|a| {
-                a.host_os == Platform::Mac && a.host_arch == Architecture::X64
-            });
+            return self
+                .archives
+                .iter()
+                .find(|a| a.host_os == Platform::Mac && a.host_arch == Architecture::X64);
         }
 
         None
@@ -175,12 +177,15 @@ pub struct Repository {
 
 impl Repository {
     pub fn new() -> Self {
-        Self { packages: Vec::new() }
+        Self {
+            packages: Vec::new(),
+        }
     }
 
     /// Fetch repository from URL (package_list.binpb is protobuf format)
     pub fn fetch(url: &str, downloader: &Downloader) -> Result<Self> {
-        let bytes = downloader.fetch_bytes(url)
+        let bytes = downloader
+            .fetch_bytes(url)
             .with_context(|| format!("Failed to fetch repository from: {}", url))?;
 
         // Parse protobuf PackageList
@@ -247,13 +252,16 @@ impl Repository {
             let wire_type = tag & 0x7;
 
             match field_num {
-                1 => { // obsolete (bool)
+                1 => {
+                    // obsolete (bool)
                     obsolete = read_varint(&mut cursor).ok()? != 0;
                 }
-                2 => { // path (string)
+                2 => {
+                    // path (string)
                     path = read_string(&mut cursor).ok()?;
                 }
-                3 => { // revision (message)
+                3 => {
+                    // revision (message)
                     let len = read_varint(&mut cursor).ok()?;
                     let start = cursor.position() as usize;
                     if start + len as usize <= bytes.len() {
@@ -261,27 +269,35 @@ impl Repository {
                     }
                     cursor.set_position((start + len as usize) as u64);
                 }
-                4 => { // display_name (string)
+                4 => {
+                    // display_name (string)
                     display_name = read_string(&mut cursor).ok()?;
                 }
-                7 => { // channel (int32)
+                7 => {
+                    // channel (int32)
                     channel = Channel::from_int(read_varint(&mut cursor).ok()? as i32);
                 }
-                8 => { // archives (repeated message)
+                8 => {
+                    // archives (repeated message)
                     let len = read_varint(&mut cursor).ok()?;
                     let start = cursor.position() as usize;
                     if start + len as usize <= bytes.len() {
-                        if let Some(archive) = Self::parse_archive(&bytes[start..start + len as usize]) {
+                        if let Some(archive) =
+                            Self::parse_archive(&bytes[start..start + len as usize])
+                        {
                             archives.push(archive);
                         }
                     }
                     cursor.set_position((start + len as usize) as u64);
                 }
-                6 => { // dependencies (repeated message)
+                6 => {
+                    // dependencies (repeated message)
                     let len = read_varint(&mut cursor).ok()?;
                     let start = cursor.position() as usize;
                     if start + len as usize <= bytes.len() {
-                        if let Some(dep) = Self::parse_dependency(&bytes[start..start + len as usize]) {
+                        if let Some(dep) =
+                            Self::parse_dependency(&bytes[start..start + len as usize])
+                        {
                             dependencies.push(dep);
                         }
                     }
@@ -324,11 +340,19 @@ impl Repository {
                 1 => major = read_varint(&mut cursor).unwrap_or(0) as i32,
                 2 => minor = Some(read_varint(&mut cursor).unwrap_or(0) as i32),
                 3 => micro = Some(read_varint(&mut cursor).unwrap_or(0) as i32),
-                _ => { let wt = tag & 0x7; skip_field(&mut cursor, wt).ok(); }
+                _ => {
+                    let wt = tag & 0x7;
+                    skip_field(&mut cursor, wt).ok();
+                }
             }
         }
 
-        Revision { major, minor, micro, preview: None }
+        Revision {
+            major,
+            minor,
+            micro,
+            preview: None,
+        }
     }
 
     /// Parse Archive protobuf message
@@ -344,7 +368,8 @@ impl Repository {
             let wire_type = tag & 0x7;
 
             match field_num {
-                1 => { // artifact
+                1 => {
+                    // artifact
                     let len = read_varint(&mut cursor).ok()?;
                     let start = cursor.position() as usize;
                     if start + len as usize <= bytes.len() {
@@ -360,11 +385,17 @@ impl Repository {
                     let arch_val = read_varint(&mut cursor).ok()? as i32;
                     host_arch = Architecture::from_int(arch_val);
                 }
-                _ => { skip_field(&mut cursor, wire_type).ok(); }
+                _ => {
+                    skip_field(&mut cursor, wire_type).ok();
+                }
             }
         }
 
-        artifact.map(|a| Archive { artifact: a, host_os, host_arch })
+        artifact.map(|a| Archive {
+            artifact: a,
+            host_os,
+            host_arch,
+        })
     }
 
     /// Parse Artifact protobuf message
@@ -383,11 +414,17 @@ impl Repository {
                 1 => size = read_varint(&mut cursor).ok()?,
                 2 => checksum = read_string(&mut cursor).ok()?,
                 3 => url = read_string(&mut cursor).ok()?,
-                _ => { skip_field(&mut cursor, wire_type).ok(); }
+                _ => {
+                    skip_field(&mut cursor, wire_type).ok();
+                }
             }
         }
 
-        Some(Artifact { size, checksum, url })
+        Some(Artifact {
+            size,
+            checksum,
+            url,
+        })
     }
 
     /// Parse Dependency protobuf message
@@ -407,11 +444,14 @@ impl Repository {
                     let len = read_varint(&mut cursor).ok()?;
                     let start = cursor.position() as usize;
                     if start + len as usize <= bytes.len() {
-                        min_revision = Some(Self::parse_revision(&bytes[start..start + len as usize]));
+                        min_revision =
+                            Some(Self::parse_revision(&bytes[start..start + len as usize]));
                     }
                     cursor.set_position((start + len as usize) as u64);
                 }
-                _ => { skip_field(&mut cursor, wire_type).ok(); }
+                _ => {
+                    skip_field(&mut cursor, wire_type).ok();
+                }
             }
         }
 
@@ -420,14 +460,16 @@ impl Repository {
 
     /// Find packages matching a path pattern
     pub fn find(&self, path: &str) -> Vec<&Package> {
-        self.packages.iter()
+        self.packages
+            .iter()
             .filter(|p| p.path == path || p.path.starts_with(&format!("{};", path)))
             .collect()
     }
 
     /// Find latest package for a path
     pub fn find_latest(&self, path: &str, channel: Channel) -> Option<&Package> {
-        self.packages.iter()
+        self.packages
+            .iter()
             .filter(|p| p.path == path || p.path.starts_with(&format!("{};", path)))
             .filter(|p| p.channel <= channel || p.channel == Channel::Stable)
             .filter(|p| !p.obsolete)
@@ -436,7 +478,8 @@ impl Repository {
 
     /// Find package by exact path with version
     pub fn find_exact(&self, path: &str, revision: &Revision) -> Option<&Package> {
-        self.packages.iter()
+        self.packages
+            .iter()
             .find(|p| p.path == path && p.revision.cmp(revision) == std::cmp::Ordering::Equal)
     }
 
@@ -461,9 +504,15 @@ impl Repository {
                 {
                     eprintln!("Package: {}", pkg.path);
                     for archive in &pkg.archives {
-                        eprintln!("  Archive: os={}, arch={}", archive.host_os as i32, archive.host_arch as i32);
+                        eprintln!(
+                            "  Archive: os={}, arch={}",
+                            archive.host_os as i32, archive.host_arch as i32
+                        );
                     }
-                    eprintln!("  Looking for: os={}, arch={}", current_platform as i32, current_arch as i32);
+                    eprintln!(
+                        "  Looking for: os={}, arch={}",
+                        current_platform as i32, current_arch as i32
+                    );
                 }
 
                 // Find archive for current platform
@@ -487,7 +536,8 @@ impl Repository {
                     // Add dependencies
                     for dep in &pkg.dependencies {
                         if let Some(dep_pkg) = self.find_latest(&dep.path, channel) {
-                            let dep_archive = dep_pkg.find_archive(Platform::current(), Architecture::current());
+                            let dep_archive =
+                                dep_pkg.find_archive(Platform::current(), Architecture::current());
                             if let Some(dep_archive) = dep_archive {
                                 let dep_url = if dep_archive.artifact.url.starts_with("http") {
                                     dep_archive.artifact.url.clone()
@@ -513,16 +563,25 @@ impl Repository {
     }
 
     /// List packages for display
-    pub fn list(&self, installed: Option<&Sdk>, all: bool, all_versions: bool, pattern: Option<&str>, channel: Channel) {
+    pub fn list(
+        &self,
+        installed: Option<&Sdk>,
+        all: bool,
+        all_versions: bool,
+        pattern: Option<&str>,
+        channel: Channel,
+    ) {
         let packages_to_show: Vec<&Package> = if all {
-            self.packages.iter()
+            self.packages
+                .iter()
                 .filter(|p| !p.obsolete)
                 .filter(|p| p.channel <= channel || p.channel == Channel::Stable)
                 .collect()
         } else {
             // Show installed packages
             if let Some(sdk) = installed {
-                sdk.entries.iter()
+                sdk.entries
+                    .iter()
                     .filter_map(|e| self.find_latest(&e.path, channel))
                     .collect()
             } else {
@@ -532,7 +591,8 @@ impl Repository {
 
         // Filter by pattern
         let packages_to_show: Vec<&Package> = if let Some(p) = pattern {
-            packages_to_show.iter()
+            packages_to_show
+                .iter()
                 .filter(|pkg| pkg.path.contains(p) || pkg.display_name.contains(p))
                 .cloned()
                 .collect()
@@ -541,7 +601,8 @@ impl Repository {
         };
 
         // Group by path
-        let mut groups: std::collections::HashMap<String, Vec<&Package>> = std::collections::HashMap::new();
+        let mut groups: std::collections::HashMap<String, Vec<&Package>> =
+            std::collections::HashMap::new();
         for pkg in packages_to_show {
             groups.entry(pkg.path.clone()).or_default().push(pkg);
         }
@@ -562,7 +623,12 @@ impl Repository {
                     } else {
                         ""
                     };
-                    println!("  {} {} {}", pkg.revision.to_string(), pkg.display_name, status);
+                    println!(
+                        "  {} {} {}",
+                        pkg.revision.to_string(),
+                        pkg.display_name,
+                        status
+                    );
                 }
             } else {
                 let latest = pkgs.iter().max_by(|a, b| a.revision.cmp(&b.revision));
@@ -582,7 +648,13 @@ impl Repository {
                     } else {
                         ""
                     };
-                    println!("{}\t{}\t{}\t{}", path, pkg.revision.to_string(), pkg.display_name, status);
+                    println!(
+                        "{}\t{}\t{}\t{}",
+                        path,
+                        pkg.revision.to_string(),
+                        pkg.display_name,
+                        status
+                    );
                 }
             }
         }
@@ -635,13 +707,20 @@ fn read_string(cursor: &mut Cursor<&[u8]>) -> Result<String> {
 
 fn skip_field(cursor: &mut Cursor<&[u8]>, wire_type: u64) -> Result<()> {
     match wire_type {
-        0 => { read_varint(cursor)?; } // Varint
-        1 => { cursor.set_position(cursor.position() + 8); } // 64-bit
-        2 => { // Length-delimited
+        0 => {
+            read_varint(cursor)?;
+        } // Varint
+        1 => {
+            cursor.set_position(cursor.position() + 8);
+        } // 64-bit
+        2 => {
+            // Length-delimited
             let len = read_varint(cursor)?;
             cursor.set_position(cursor.position() + len);
         }
-        5 => { cursor.set_position(cursor.position() + 4); } // 32-bit
+        5 => {
+            cursor.set_position(cursor.position() + 4);
+        } // 32-bit
         _ => return Err(anyhow::anyhow!("Unknown wire type: {}", wire_type)),
     }
     Ok(())

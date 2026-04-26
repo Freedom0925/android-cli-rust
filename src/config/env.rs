@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use std::env;
 use anyhow::Result;
+use std::env;
+use std::path::PathBuf;
 
 /// Environment configuration for Android CLI
 pub struct EnvConfig {
@@ -29,8 +29,7 @@ pub struct EnvConfig {
 impl EnvConfig {
     /// Detect configuration from environment variables and defaults
     pub fn detect() -> Result<Self> {
-        let user_home = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/"));
+        let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
         let android_user_home = user_home.join(".android");
 
@@ -60,8 +59,8 @@ impl EnvConfig {
             .unwrap_or_else(|_| format!("{}/package_list.binpb", sdk_repo_url));
 
         // Default channel
-        let default_channel = env::var("ANDROID_CLI_CHANNEL")
-            .unwrap_or_else(|_| "stable".to_string());
+        let default_channel =
+            env::var("ANDROID_CLI_CHANNEL").unwrap_or_else(|_| "stable".to_string());
 
         // Metrics
         let no_metrics = env::var("ANDROID_CLI_NO_METRICS")
@@ -119,7 +118,8 @@ impl EnvConfig {
 
     /// Get effective SDK path
     pub fn sdk_path(&self) -> PathBuf {
-        self.android_home.clone()
+        self.android_home
+            .clone()
             .unwrap_or_else(|| self.default_sdk_path())
     }
 
@@ -163,10 +163,19 @@ pub const ENV_VARS: &[(&str, &str)] = &[
     ("HTTP_PROXY", "Standard HTTP proxy"),
     ("HTTPS_PROXY", "Standard HTTPS proxy"),
     ("ANDROID_SDK_REPO_URL", "SDK repository base URL"),
-    ("ANDROID_SDK_INDEX_URL", "SDK index URL (package_list.binpb)"),
-    ("ANDROID_CLI_CHANNEL", "Default channel (stable/beta/canary)"),
+    (
+        "ANDROID_SDK_INDEX_URL",
+        "SDK index URL (package_list.binpb)",
+    ),
+    (
+        "ANDROID_CLI_CHANNEL",
+        "Default channel (stable/beta/canary)",
+    ),
     ("ANDROID_CLI_NO_METRICS", "Disable metrics (1/true)"),
-    ("ANDROID_CLI_FORCE_LICENSES", "Auto-accept licenses (1/true)"),
+    (
+        "ANDROID_CLI_FORCE_LICENSES",
+        "Auto-accept licenses (1/true)",
+    ),
     ("ANDROID_CLI_VERBOSE", "Enable verbose output (1/true)"),
 ];
 #[cfg(test)]

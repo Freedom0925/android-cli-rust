@@ -1,5 +1,5 @@
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, Rgba, Luma};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb, Rgba};
 
 use crate::vision::Rect;
 
@@ -23,7 +23,9 @@ impl ImageUtils {
     /// * `img` - Input image
     /// * `f` - Callback function (x, y, pixel)
     pub fn for_each_pixel<F>(img: &DynamicImage, mut f: F)
-    where F: FnMut(u32, u32, Rgba<u8>) {
+    where
+        F: FnMut(u32, u32, Rgba<u8>),
+    {
         let (width, height) = img.dimensions();
         for y in 0..height {
             for x in 0..width {
@@ -35,7 +37,9 @@ impl ImageUtils {
 
     /// Iterate over each pixel of an RGBA buffer with callback
     pub fn for_each_pixel_rgba<F>(img: &ImageBuffer<Rgba<u8>, Vec<u8>>, mut f: F)
-    where F: FnMut(u32, u32, &Rgba<u8>) {
+    where
+        F: FnMut(u32, u32, &Rgba<u8>),
+    {
         let (width, height) = img.dimensions();
         for y in 0..height {
             for x in 0..width {
@@ -47,7 +51,9 @@ impl ImageUtils {
 
     /// Iterate over each pixel of a grayscale buffer with callback
     pub fn for_each_pixel_luma<F>(img: &ImageBuffer<Luma<u8>, Vec<u8>>, mut f: F)
-    where F: FnMut(u32, u32, &Luma<u8>) {
+    where
+        F: FnMut(u32, u32, &Luma<u8>),
+    {
         let (width, height) = img.dimensions();
         for y in 0..height {
             for x in 0..width {
@@ -64,7 +70,12 @@ impl ImageUtils {
     /// * `x` - X coordinate (can be negative)
     /// * `y` - Y coordinate (can be negative)
     /// * `color` - Pixel color to set
-    pub fn safe_set_pixel(img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, x: i32, y: i32, color: Rgba<u8>) {
+    pub fn safe_set_pixel(
+        img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+        x: i32,
+        y: i32,
+        color: Rgba<u8>,
+    ) {
         if x >= 0 && y >= 0 {
             let (width, height) = img.dimensions();
             if x < width as i32 && y < height as i32 {
@@ -74,7 +85,12 @@ impl ImageUtils {
     }
 
     /// Safely set grayscale pixel with bounds checking
-    pub fn safe_set_pixel_luma(img: &mut ImageBuffer<Luma<u8>, Vec<u8>>, x: i32, y: i32, color: Luma<u8>) {
+    pub fn safe_set_pixel_luma(
+        img: &mut ImageBuffer<Luma<u8>, Vec<u8>>,
+        x: i32,
+        y: i32,
+        color: Luma<u8>,
+    ) {
         if x >= 0 && y >= 0 {
             let (width, height) = img.dimensions();
             if x < width as i32 && y < height as i32 {
@@ -139,9 +155,15 @@ impl ImageUtils {
         let mut spacing = 0i32;
 
         for digit_char in number_str.chars() {
-            let digit = digit_char.to_digit(10)
-                .context("Invalid digit character")?;
-            crate::vision::digits::Digits::draw_digit_on_buffer(&mut rgba_img, x + spacing, y, digit, color, scale)?;
+            let digit = digit_char.to_digit(10).context("Invalid digit character")?;
+            crate::vision::digits::Digits::draw_digit_on_buffer(
+                &mut rgba_img,
+                x + spacing,
+                y,
+                digit,
+                color,
+                scale,
+            )?;
             spacing += (4 * scale) as i32;
         }
 

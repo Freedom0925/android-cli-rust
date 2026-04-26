@@ -188,12 +188,7 @@ pub struct KbSearchResponse {
 
 impl KbSearchResponse {
     /// Create a new search response
-    pub fn new(
-        results: Vec<KbSearchResult>,
-        total: usize,
-        query: String,
-        time_ms: u64,
-    ) -> Self {
+    pub fn new(results: Vec<KbSearchResult>, total: usize, query: String, time_ms: u64) -> Self {
         Self {
             results,
             total,
@@ -214,7 +209,10 @@ impl KbSearchResponse {
 
     /// Format for display
     pub fn format_display(&self) -> String {
-        let mut output = format!("Found {} results for '{}' ({}ms):\n", self.total, self.query, self.time_ms);
+        let mut output = format!(
+            "Found {} results for '{}' ({}ms):\n",
+            self.total, self.query, self.time_ms
+        );
 
         for (i, result) in self.results.iter().enumerate() {
             output.push_str(&format!("{}. {}\n", i + 1, result.format_display()));
@@ -289,7 +287,7 @@ mod tests {
         );
 
         assert_eq!(result.url, "/test");
-        assert_eq!(result.content_length(), 41);  // "This is the full content of the document." is 41 chars
+        assert_eq!(result.content_length(), 41); // "This is the full content of the document." is 41 chars
         assert_eq!(result.word_count(), 8);
     }
 
@@ -341,8 +339,22 @@ mod tests {
     #[test]
     fn test_kb_search_response_creation() {
         let results = vec![
-            KbSearchResult::new(1.0, "/a".to_string(), "A".to_string(), "a.md".to_string(), "summary a".to_string(), "a".to_string()),
-            KbSearchResult::new(0.5, "/b".to_string(), "B".to_string(), "b.md".to_string(), "summary b".to_string(), "b".to_string()),
+            KbSearchResult::new(
+                1.0,
+                "/a".to_string(),
+                "A".to_string(),
+                "a.md".to_string(),
+                "summary a".to_string(),
+                "a".to_string(),
+            ),
+            KbSearchResult::new(
+                0.5,
+                "/b".to_string(),
+                "B".to_string(),
+                "b.md".to_string(),
+                "summary b".to_string(),
+                "b".to_string(),
+            ),
         ];
 
         let response = KbSearchResponse::new(results, 2, "test".to_string(), 50);
@@ -363,9 +375,14 @@ mod tests {
 
     #[test]
     fn test_kb_search_response_format() {
-        let results = vec![
-            KbSearchResult::new(1.5, "/doc".to_string(), "Document".to_string(), "doc.md".to_string(), "Summary text".to_string(), "doc".to_string()),
-        ];
+        let results = vec![KbSearchResult::new(
+            1.5,
+            "/doc".to_string(),
+            "Document".to_string(),
+            "doc.md".to_string(),
+            "Summary text".to_string(),
+            "doc".to_string(),
+        )];
 
         let response = KbSearchResponse::new(results, 1, "query".to_string(), 25);
 

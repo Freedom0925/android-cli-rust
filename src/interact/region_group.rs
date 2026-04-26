@@ -3,7 +3,7 @@
 //! Based on original RegionGroup.java and MutableRegionGroup.java from Kotlin implementation
 
 use crate::vision::Rect;
-use std::collections::{HashSet, HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Region trait - represents a region with bounds
 pub trait Region {
@@ -54,7 +54,12 @@ impl<T: Region + Eq + std::hash::Hash + Clone> std::hash::Hash for MutableRegion
 
 impl<T: Region + Eq + std::hash::Hash + Clone> MutableRegionGroup<T> {
     /// Create a new region group
-    pub fn new(regions: HashSet<T>, bounds: Rect, parent: Option<Box<MutableRegionGroup<T>>>, depth: i32) -> Self {
+    pub fn new(
+        regions: HashSet<T>,
+        bounds: Rect,
+        parent: Option<Box<MutableRegionGroup<T>>>,
+        depth: i32,
+    ) -> Self {
         Self {
             regions,
             bounds,
@@ -120,12 +125,16 @@ pub fn group_regions<T: Region + Eq + std::hash::Hash + Clone>(
     for region in regions {
         if let Some(p) = parent(region) {
             parents.insert(region.clone(), p.clone());
-            children.entry(p).or_insert_with(Vec::new).push(region.clone());
+            children
+                .entry(p)
+                .or_insert_with(Vec::new)
+                .push(region.clone());
         }
     }
 
     // Find roots (regions without parents)
-    let roots: Vec<T> = regions.iter()
+    let roots: Vec<T> = regions
+        .iter()
         .filter(|r| !parents.contains_key(r))
         .cloned()
         .collect();
@@ -142,7 +151,8 @@ pub fn group_regions<T: Region + Eq + std::hash::Hash + Clone>(
 
         for set in merged_sets {
             // Calculate bounds by merging all region bounds
-            let bounds = set.iter()
+            let bounds = set
+                .iter()
                 .map(|r| r.bounds())
                 .fold(Rect::empty(), |acc, b| acc.merge(&b));
 
@@ -163,7 +173,8 @@ pub fn group_regions<T: Region + Eq + std::hash::Hash + Clone>(
             // Note: We can't modify parent_group here due to ownership
 
             // Get children of regions in this set
-            let group_children: Vec<T> = set.iter()
+            let group_children: Vec<T> = set
+                .iter()
                 .flat_map(|r| children.get(r).cloned().unwrap_or_default())
                 .collect();
 
@@ -188,8 +199,14 @@ fn merge_regions<T: Region + Eq + std::hash::Hash + Clone>(
         for j in (i + 1)..regions.len() {
             let other = &regions[j];
             if neighbors(region, other) {
-                graph.entry(region.clone()).or_insert_with(HashSet::new).insert(other.clone());
-                graph.entry(other.clone()).or_insert_with(HashSet::new).insert(region.clone());
+                graph
+                    .entry(region.clone())
+                    .or_insert_with(HashSet::new)
+                    .insert(other.clone());
+                graph
+                    .entry(other.clone())
+                    .or_insert_with(HashSet::new)
+                    .insert(region.clone());
             }
         }
     }
@@ -246,11 +263,20 @@ mod tests {
 
     #[test]
     fn test_rect_merge_in_group() {
-        let r1 = TestRegion { id: 1, bounds: Rect::new(0, 0, 50, 50) };
-        let r2 = TestRegion { id: 2, bounds: Rect::new(25, 25, 100, 100) };
+        let r1 = TestRegion {
+            id: 1,
+            bounds: Rect::new(0, 0, 50, 50),
+        };
+        let r2 = TestRegion {
+            id: 2,
+            bounds: Rect::new(25, 25, 100, 100),
+        };
 
         let set = HashSet::from([r1.clone(), r2.clone()]);
-        let bounds = set.iter().map(|r| r.bounds()).fold(Rect::empty(), |acc, b| acc.merge(&b));
+        let bounds = set
+            .iter()
+            .map(|r| r.bounds())
+            .fold(Rect::empty(), |acc, b| acc.merge(&b));
 
         assert_eq!(bounds.min_x, 0);
         assert_eq!(bounds.min_y, 0);
@@ -260,8 +286,14 @@ mod tests {
 
     #[test]
     fn test_merge_regions_no_neighbors() {
-        let r1 = TestRegion { id: 1, bounds: Rect::new(0, 0, 10, 10) };
-        let r2 = TestRegion { id: 2, bounds: Rect::new(100, 100, 110, 110) };
+        let r1 = TestRegion {
+            id: 1,
+            bounds: Rect::new(0, 0, 10, 10),
+        };
+        let r2 = TestRegion {
+            id: 2,
+            bounds: Rect::new(100, 100, 110, 110),
+        };
 
         let regions = vec![r1, r2];
         let merged = merge_regions(&regions, |a, b| {
@@ -275,9 +307,18 @@ mod tests {
 
     #[test]
     fn test_merge_regions_with_neighbors() {
-        let r1 = TestRegion { id: 1, bounds: Rect::new(0, 0, 10, 10) };
-        let r2 = TestRegion { id: 2, bounds: Rect::new(8, 8, 18, 18) };
-        let r3 = TestRegion { id: 3, bounds: Rect::new(16, 16, 26, 26) };
+        let r1 = TestRegion {
+            id: 1,
+            bounds: Rect::new(0, 0, 10, 10),
+        };
+        let r2 = TestRegion {
+            id: 2,
+            bounds: Rect::new(8, 8, 18, 18),
+        };
+        let r3 = TestRegion {
+            id: 3,
+            bounds: Rect::new(16, 16, 26, 26),
+        };
 
         let regions = vec![r1.clone(), r2.clone(), r3.clone()];
         let merged = merge_regions(&regions, |a, b| {
@@ -293,17 +334,28 @@ mod tests {
 
     #[test]
     fn test_group_regions_simple() {
-        let r1 = TestRegion { id: 1, bounds: Rect::new(0, 0, 100, 100) };
-        let r2 = TestRegion { id: 2, bounds: Rect::new(10, 10, 50, 50) };
+        let r1 = TestRegion {
+            id: 1,
+            bounds: Rect::new(0, 0, 100, 100),
+        };
+        let r2 = TestRegion {
+            id: 2,
+            bounds: Rect::new(10, 10, 50, 50),
+        };
 
         // r2 is child of r1 (contained)
         let regions = vec![r1.clone(), r2.clone()];
 
-        let groups = group_regions(&regions,
+        let groups = group_regions(
+            &regions,
             |_a, _b| false, // No merging
             |r| {
-                if r.id == 2 { Some(r1.clone()) } else { None }
-            }
+                if r.id == 2 {
+                    Some(r1.clone())
+                } else {
+                    None
+                }
+            },
         );
 
         // Should have 2 groups (root + child)
@@ -312,7 +364,10 @@ mod tests {
 
     #[test]
     fn test_mutable_region_group_creation() {
-        let r = TestRegion { id: 1, bounds: Rect::new(0, 0, 50, 50) };
+        let r = TestRegion {
+            id: 1,
+            bounds: Rect::new(0, 0, 50, 50),
+        };
         let set = HashSet::from([r]);
 
         let group = MutableRegionGroup::new(set.clone(), Rect::new(0, 0, 50, 50), None, 0);
@@ -324,7 +379,10 @@ mod tests {
 
     #[test]
     fn test_region_trait_bounds() {
-        let r = TestRegion { id: 1, bounds: Rect::new(10, 20, 50, 60) };
+        let r = TestRegion {
+            id: 1,
+            bounds: Rect::new(10, 20, 50, 60),
+        };
         assert_eq!(r.bounds().min_x, 10);
         assert_eq!(r.bounds().max_y, 60);
     }

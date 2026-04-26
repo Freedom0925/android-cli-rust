@@ -2,12 +2,12 @@
 //!
 //! Based on Kotlin AndroidCliAnalytics and related classes
 
-use std::path::PathBuf;
-use std::fs;
-use std::io::Write;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::Write;
+use std::path::PathBuf;
 
 /// Metrics configuration
 pub struct MetricsConfig {
@@ -79,7 +79,13 @@ impl MetricsConfig {
     }
 
     /// Record an invocation
-    pub fn record_invocation(&self, command: &str, success: bool, duration_ms: u64, platform: &str) -> Result<()> {
+    pub fn record_invocation(
+        &self,
+        command: &str,
+        success: bool,
+        duration_ms: u64,
+        platform: &str,
+    ) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -97,7 +103,9 @@ impl MetricsConfig {
 
         // Append to daily log file
         let date_str = record.timestamp.format("%Y-%m-%d").to_string();
-        let log_file = self.metrics_dir.join(format!("invocations_{}.jsonl", date_str));
+        let log_file = self
+            .metrics_dir
+            .join(format!("invocations_{}.jsonl", date_str));
 
         let json = serde_json::to_string(&record)?;
         let mut file = fs::OpenOptions::new()
@@ -112,7 +120,12 @@ impl MetricsConfig {
     }
 
     /// Record a crash
-    pub fn record_crash(&self, error: &str, stack_trace: Option<&str>, command: Option<&str>) -> Result<()> {
+    pub fn record_crash(
+        &self,
+        error: &str,
+        stack_trace: Option<&str>,
+        command: Option<&str>,
+    ) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -155,7 +168,11 @@ impl MetricsConfig {
             let path = entry.path();
 
             if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-                if path.file_name().map(|n| n.to_string_lossy().starts_with("invocations")).unwrap_or(false) {
+                if path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().starts_with("invocations"))
+                    .unwrap_or(false)
+                {
                     let content = fs::read_to_string(&path)?;
 
                     for line in content.lines() {
@@ -197,11 +214,15 @@ impl MetricsConfig {
         for entry in fs::read_dir(&self.metrics_dir)? {
             let entry = entry?;
             let path = entry.path();
-            let filename = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let filename = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
 
             // Only clear pending files (invocations_*.jsonl), keep uploaded files (uploaded_*.json)
             if path.extension().map(|e| e == "jsonl").unwrap_or(false)
-                && filename.starts_with("invocations_") {
+                && filename.starts_with("invocations_")
+            {
                 fs::remove_file(&path)?;
             }
         }
@@ -249,13 +270,20 @@ impl MetricsUploader {
 
         // Write invocations to uploaded file
         let date_str = Utc::now().format("%Y-%m-%d").to_string();
-        let uploaded_invocations_file = self.config.metrics_dir.join(format!("uploaded_invocations_{}.json", date_str));
+        let uploaded_invocations_file = self
+            .config
+            .metrics_dir
+            .join(format!("uploaded_invocations_{}.json", date_str));
 
         let invocations_json = serde_json::to_string_pretty(&invocations)?;
         fs::write(&uploaded_invocations_file, &invocations_json)?;
 
         println!("Exported metrics to local files:");
-        println!("  Invocations: {} records -> {}", invocations.len(), uploaded_invocations_file.display());
+        println!(
+            "  Invocations: {} records -> {}",
+            invocations.len(),
+            uploaded_invocations_file.display()
+        );
 
         // Write crashes to uploaded file
         if !crashes.is_empty() {
@@ -269,11 +297,18 @@ impl MetricsUploader {
                 Vec::new()
             };
 
-            let all_crashes: Vec<CrashRecord> = existing_crashes.into_iter().chain(crashes.into_iter()).collect();
+            let all_crashes: Vec<CrashRecord> = existing_crashes
+                .into_iter()
+                .chain(crashes.into_iter())
+                .collect();
             let crashes_json = serde_json::to_string_pretty(&all_crashes)?;
             fs::write(&uploaded_crashes_file, &crashes_json)?;
 
-            println!("  Crashes: {} reports -> {}", all_crashes.len(), uploaded_crashes_file.display());
+            println!(
+                "  Crashes: {} reports -> {}",
+                all_crashes.len(),
+                uploaded_crashes_file.display()
+            );
         }
 
         let result = UploadResult {
@@ -317,11 +352,18 @@ impl MetricsUploader {
             Vec::new()
         };
 
-        let all_crashes: Vec<CrashRecord> = existing_crashes.into_iter().chain(crashes.into_iter()).collect();
+        let all_crashes: Vec<CrashRecord> = existing_crashes
+            .into_iter()
+            .chain(crashes.into_iter())
+            .collect();
         let crashes_json = serde_json::to_string_pretty(&all_crashes)?;
         fs::write(&uploaded_crashes_file, &crashes_json)?;
 
-        println!("Exported {} crash reports to {}", crash_count, uploaded_crashes_file.display());
+        println!(
+            "Exported {} crash reports to {}",
+            crash_count,
+            uploaded_crashes_file.display()
+        );
 
         Ok(())
     }
@@ -350,7 +392,9 @@ mod tests {
         assert!(!config.is_enabled());
 
         // Recording should silently skip when disabled
-        config.record_invocation("test", true, 100, "test_platform").unwrap();
+        config
+            .record_invocation("test", true, 100, "test_platform")
+            .unwrap();
 
         let invocations = config.get_pending_invocations().unwrap();
         assert!(invocations.is_empty());
@@ -412,11 +456,17 @@ mod tests {
         let config = MetricsConfig::new(true, &PathBuf::from(dir.path()), "0.1.0");
 
         // Record some invocations
-        config.record_invocation("sdk install", true, 100, "darwin").unwrap();
-        config.record_invocation("screen capture", true, 200, "darwin").unwrap();
+        config
+            .record_invocation("sdk install", true, 100, "darwin")
+            .unwrap();
+        config
+            .record_invocation("screen capture", true, 200, "darwin")
+            .unwrap();
 
         // Record a crash
-        config.record_crash("Test error", Some("stack trace"), Some("test")).unwrap();
+        config
+            .record_crash("Test error", Some("stack trace"), Some("test"))
+            .unwrap();
 
         let uploader = MetricsUploader::new(config);
         let result = uploader.upload_now().unwrap();
@@ -432,7 +482,13 @@ mod tests {
         // Find uploaded invocations file
         let uploaded_invocations = fs::read_dir(&metrics_dir)
             .unwrap()
-            .find(|e| e.as_ref().unwrap().file_name().to_string_lossy().starts_with("uploaded_invocations"))
+            .find(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("uploaded_invocations")
+            })
             .unwrap()
             .unwrap()
             .path();
@@ -446,7 +502,8 @@ mod tests {
         assert!(uploaded_crashes.exists());
 
         let crashes_content = fs::read_to_string(&uploaded_crashes).unwrap();
-        let uploaded_crashes_records: Vec<CrashRecord> = serde_json::from_str(&crashes_content).unwrap();
+        let uploaded_crashes_records: Vec<CrashRecord> =
+            serde_json::from_str(&crashes_content).unwrap();
         assert_eq!(uploaded_crashes_records.len(), 1);
     }
 
@@ -456,13 +513,18 @@ mod tests {
         let config = MetricsConfig::new(true, &PathBuf::from(dir.path()), "0.1.0");
 
         // Record some invocations
-        config.record_invocation("test", true, 100, "darwin").unwrap();
+        config
+            .record_invocation("test", true, 100, "darwin")
+            .unwrap();
 
         // Check pending file exists
         let metrics_dir = dir.path().join("metrics");
-        let pending_exists = fs::read_dir(&metrics_dir)
-            .unwrap()
-            .any(|e| e.unwrap().file_name().to_string_lossy().starts_with("invocations_"));
+        let pending_exists = fs::read_dir(&metrics_dir).unwrap().any(|e| {
+            e.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("invocations_")
+        });
 
         assert!(pending_exists);
 
@@ -475,7 +537,10 @@ mod tests {
             .filter_map(|e| e.ok())
             .any(|e| {
                 e.file_name().to_string_lossy().starts_with("invocations_")
-                && e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false)
+                    && e.path()
+                        .extension()
+                        .map(|ext| ext == "jsonl")
+                        .unwrap_or(false)
             });
 
         assert!(!pending_after);
