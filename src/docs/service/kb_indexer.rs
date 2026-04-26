@@ -1,16 +1,18 @@
-use anyhow::{Context, Result};
+use anyhow::{Result, Context};
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
-use std::path::{Path, PathBuf};
 use tantivy::{
     collector::TopDocs,
     doc,
     query::QueryParser,
-    schema::{Field, Schema, STORED, TEXT},
-    Index, IndexWriter, ReloadPolicy,
+    schema::{Schema, TEXT, STORED, Field, Value},
+    Index,
+    IndexWriter,
+    ReloadPolicy,
 };
 use zip::ZipArchive;
+use std::io::Read;
 
 use super::kb_doc::KbDocFile;
 use super::kb_download::KnowledgeBaseConstants;
@@ -46,49 +48,38 @@ impl KbSchema {
         let url = schema_builder.add_text_field(KnowledgeBaseConstants::URL_FIELD, TEXT | STORED);
 
         // Title - indexed and stored
-        let title =
-            schema_builder.add_text_field(KnowledgeBaseConstants::TITLE_FIELD, TEXT | STORED);
+        let title = schema_builder.add_text_field(KnowledgeBaseConstants::TITLE_FIELD, TEXT | STORED);
 
         // Contents - indexed (full text search)
         let contents = schema_builder.add_text_field(KnowledgeBaseConstants::CONTENTS_FIELD, TEXT);
 
         // Keywords - indexed and stored
-        let keywords =
-            schema_builder.add_text_field(KnowledgeBaseConstants::KEYWORDS_FIELD, TEXT | STORED);
+        let keywords = schema_builder.add_text_field(KnowledgeBaseConstants::KEYWORDS_FIELD, TEXT | STORED);
 
         // Summary - indexed and stored
-        let summary =
-            schema_builder.add_text_field(KnowledgeBaseConstants::SUMMARY_FIELD, TEXT | STORED);
+        let summary = schema_builder.add_text_field(KnowledgeBaseConstants::SUMMARY_FIELD, TEXT | STORED);
 
         // Filepath - stored (for reference)
-        let filepath =
-            schema_builder.add_text_field(KnowledgeBaseConstants::FILEPATH_FIELD, STORED);
+        let filepath = schema_builder.add_text_field(KnowledgeBaseConstants::FILEPATH_FIELD, STORED);
 
         // Relative URL - indexed and stored
-        let relative_url = schema_builder
-            .add_text_field(KnowledgeBaseConstants::RELATIVE_URL_FIELD, TEXT | STORED);
+        let relative_url = schema_builder.add_text_field(KnowledgeBaseConstants::RELATIVE_URL_FIELD, TEXT | STORED);
 
         // Short description - indexed and stored
-        let short_description = schema_builder.add_text_field(
-            KnowledgeBaseConstants::SHORT_DESCRIPTION_FIELD,
-            TEXT | STORED,
-        );
+        let short_description = schema_builder.add_text_field(KnowledgeBaseConstants::SHORT_DESCRIPTION_FIELD, TEXT | STORED);
 
         let schema = schema_builder.build();
 
-        (
-            schema,
-            Self {
-                url,
-                title,
-                contents,
-                keywords,
-                summary,
-                filepath,
-                relative_url,
-                short_description,
-            },
-        )
+        (schema, Self {
+            url,
+            title,
+            contents,
+            keywords,
+            summary,
+            filepath,
+            relative_url,
+            short_description,
+        })
     }
 }
 
@@ -113,7 +104,8 @@ impl KbIndexerService {
     /// Ensure index directory exists
     fn ensure_index_dir(&self) -> Result<()> {
         if !self.index_dir.exists() {
-            fs::create_dir_all(&self.index_dir).context("Failed to create KB index directory")?;
+            fs::create_dir_all(&self.index_dir)
+                .context("Failed to create KB index directory")?;
         }
         Ok(())
     }
@@ -130,8 +122,8 @@ impl KbIndexerService {
 
         if index_exists {
             // Open existing index
-            let index =
-                Index::open_in_dir(&self.index_dir).context("Failed to open existing KB index")?;
+            let index = Index::open_in_dir(&self.index_dir)
+                .context("Failed to open existing KB index")?;
             self.index = Some(index);
         } else {
             // Create new index
@@ -150,25 +142,24 @@ impl KbIndexerService {
     pub fn build_index_from_zip(&mut self, zip_path: &Path) -> Result<usize> {
         self.init_index()?;
 
-        let index = self
-            .index
-            .as_ref()
+        let index = self.index.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Index not initialized"))?;
 
-        let mut writer = index
-            .writer(50_000_000) // 50MB heap
+        let mut writer = index.writer(50_000_000) // 50MB heap
             .context("Failed to create index writer")?;
 
         // Open ZIP file
         let file = fs::File::open(zip_path)
             .with_context(|| format!("Failed to open ZIP: {}", zip_path.display()))?;
 
-        let mut archive = ZipArchive::new(file).context("Failed to read ZIP archive")?;
+        let mut archive = ZipArchive::new(file)
+            .context("Failed to read ZIP archive")?;
 
         // First pass: read all entries into memory
         let mut all_entries: HashMap<String, Vec<u8>> = HashMap::new();
         for i in 0..archive.len() {
-            let mut file = archive.by_index(i).context("Failed to get ZIP entry")?;
+            let mut file = archive.by_index(i)
+                .context("Failed to get ZIP entry")?;
 
             let name = file.name().to_string();
             if !file.is_dir() {
@@ -211,18 +202,20 @@ impl KbIndexerService {
 
             // Commit periodically to avoid memory pressure
             if doc_count % 100 == 0 {
-                writer
-                    .commit()
+                writer.commit()
                     .context("Failed to commit intermediate index")?;
             }
         }
 
         // Final commit
-        writer.commit().context("Failed to commit final index")?;
+        writer.commit()
+            .context("Failed to commit final index")?;
 
         // Recreate index reader to see changes
-        let reader = index.reader().context("Failed to create index reader")?;
-        reader.reload().context("Failed to reload index reader")?;
+        let reader = index.reader()
+            .context("Failed to create index reader")?;
+        reader.reload()
+            .context("Failed to reload index reader")?;
 
         Ok(doc_count)
     }
@@ -294,8 +287,7 @@ impl KbIndexerService {
             doc.add_text(self.schema.short_description, short_desc);
         }
 
-        writer
-            .add_document(doc)
+        writer.add_document(doc)
             .context("Failed to add document to index")?;
 
         Ok(())
@@ -303,34 +295,28 @@ impl KbIndexerService {
 
     /// Search KB documents
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchHit>> {
-        let index = self
-            .index
-            .as_ref()
+        let index = self.index.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Index not initialized"))?;
 
-        let reader = index.reader().context("Failed to create index reader")?;
+        let reader = index.reader()
+            .context("Failed to create index reader")?;
 
         let searcher = reader.searcher();
 
         // Create query parser with multi-field search
-        let query_parser = QueryParser::for_index(
-            index,
-            vec![
-                self.schema.contents,
-                self.schema.title,
-                self.schema.keywords,
-                self.schema.summary,
-            ],
-        );
+        let query_parser = QueryParser::for_index(index, vec![
+            self.schema.contents,
+            self.schema.title,
+            self.schema.keywords,
+            self.schema.summary,
+        ]);
 
         // Parse query
-        let parsed_query = query_parser
-            .parse_query(query)
+        let parsed_query = query_parser.parse_query(query)
             .map_err(|e| anyhow::anyhow!("Failed to parse query: {}", e))?;
 
         // Execute search with BM25 scoring
-        let top_docs = searcher
-            .search(&parsed_query, &TopDocs::with_limit(limit))
+        let top_docs = searcher.search(&parsed_query, &TopDocs::with_limit(limit).order_by_score())
             .context("Failed to execute search")?;
 
         // Extract results
@@ -346,21 +332,14 @@ impl KbIndexerService {
     }
 
     /// Search with field boosting (advanced search)
-    pub fn search_with_boost(
-        &self,
-        query: &str,
-        title_boost: f32,
-        content_boost: f32,
-        limit: usize,
-    ) -> Result<Vec<SearchHit>> {
+    pub fn search_with_boost(&self, query: &str, title_boost: f32, content_boost: f32, limit: usize) -> Result<Vec<SearchHit>> {
         // For field boosting, we need to construct a boolean query
         // This is a simplified version - Tantivy supports complex query combinations
-        let index = self
-            .index
-            .as_ref()
+        let index = self.index.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Index not initialized"))?;
 
-        let reader = index.reader().context("Failed to create index reader")?;
+        let reader = index.reader()
+            .context("Failed to create index reader")?;
 
         let searcher = reader.searcher();
 
@@ -377,10 +356,7 @@ impl KbIndexerService {
         let mut all_hits: HashMap<u32, SearchHit> = HashMap::new();
 
         if let Some(tq) = title_query {
-            let title_docs = searcher
-                .search(&tq, &TopDocs::with_limit(limit * 2))
-                .ok()
-                .unwrap_or_default();
+            let title_docs = searcher.search(&tq, &TopDocs::with_limit(limit * 2).order_by_score()).ok().unwrap_or_default();
             for (score, addr) in title_docs {
                 let boosted_score = score * title_boost;
                 let doc = searcher.doc(addr).unwrap_or_default();
@@ -392,18 +368,14 @@ impl KbIndexerService {
         }
 
         if let Some(cq) = content_query {
-            let content_docs = searcher
-                .search(&cq, &TopDocs::with_limit(limit * 2))
-                .ok()
-                .unwrap_or_default();
+            let content_docs = searcher.search(&cq, &TopDocs::with_limit(limit * 2).order_by_score()).ok().unwrap_or_default();
             for (score, addr) in content_docs {
                 let boosted_score = score * content_boost;
                 let doc = searcher.doc(addr).unwrap_or_default();
                 let hit = SearchHit::from_tantivy_doc(doc, &self.schema, boosted_score);
 
                 // Merge or add
-                all_hits
-                    .entry(addr.doc_id)
+                all_hits.entry(addr.doc_id)
                     .and_modify(|existing| {
                         existing.score += boosted_score;
                     })
@@ -413,11 +385,7 @@ impl KbIndexerService {
 
         // Sort by score and take top results
         let mut hits: Vec<SearchHit> = all_hits.into_values().collect();
-        hits.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         hits.truncate(limit);
 
         Ok(hits)
@@ -425,12 +393,11 @@ impl KbIndexerService {
 
     /// Get index statistics
     pub fn stats(&self) -> Result<IndexStats> {
-        let index = self
-            .index
-            .as_ref()
+        let index = self.index.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Index not initialized"))?;
 
-        let reader = index.reader().context("Failed to create index reader")?;
+        let reader = index.reader()
+            .context("Failed to create index reader")?;
 
         let searcher = reader.searcher();
 
@@ -449,7 +416,8 @@ impl KbIndexerService {
     /// Clear index (delete all documents)
     pub fn clear_index(&mut self) -> Result<()> {
         if self.index_dir.exists() {
-            fs::remove_dir_all(&self.index_dir).context("Failed to clear index directory")?;
+            fs::remove_dir_all(&self.index_dir)
+                .context("Failed to clear index directory")?;
         }
         self.index = None;
         Ok(())
@@ -480,48 +448,12 @@ impl SearchHit {
     fn from_tantivy_doc(doc: tantivy::TantivyDocument, schema: &KbSchema, score: f32) -> Self {
         Self {
             score,
-            url: doc.get_first(schema.url).and_then(|v| {
-                if let tantivy::schema::OwnedValue::Str(s) = v {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            }),
-            title: doc.get_first(schema.title).and_then(|v| {
-                if let tantivy::schema::OwnedValue::Str(s) = v {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            }),
-            filepath: doc.get_first(schema.filepath).and_then(|v| {
-                if let tantivy::schema::OwnedValue::Str(s) = v {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            }),
-            summary: doc.get_first(schema.summary).and_then(|v| {
-                if let tantivy::schema::OwnedValue::Str(s) = v {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            }),
-            keywords: doc.get_first(schema.keywords).and_then(|v| {
-                if let tantivy::schema::OwnedValue::Str(s) = v {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            }),
-            relative_url: doc.get_first(schema.relative_url).and_then(|v| {
-                if let tantivy::schema::OwnedValue::Str(s) = v {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            }),
+            url: doc.get_first(schema.url).and_then(|v| v.as_str().map(|s| s.to_string())),
+            title: doc.get_first(schema.title).and_then(|v| v.as_str().map(|s| s.to_string())),
+            filepath: doc.get_first(schema.filepath).and_then(|v| v.as_str().map(|s| s.to_string())),
+            summary: doc.get_first(schema.summary).and_then(|v| v.as_str().map(|s| s.to_string())),
+            keywords: doc.get_first(schema.keywords).and_then(|v| v.as_str().map(|s| s.to_string())),
+            relative_url: doc.get_first(schema.relative_url).and_then(|v| v.as_str().map(|s| s.to_string())),
         }
     }
 }
@@ -546,12 +478,8 @@ mod tests {
 
         // Schema should have all fields
         assert!(schema.get_field(KnowledgeBaseConstants::URL_FIELD).is_ok());
-        assert!(schema
-            .get_field(KnowledgeBaseConstants::TITLE_FIELD)
-            .is_ok());
-        assert!(schema
-            .get_field(KnowledgeBaseConstants::CONTENTS_FIELD)
-            .is_ok());
+        assert!(schema.get_field(KnowledgeBaseConstants::TITLE_FIELD).is_ok());
+        assert!(schema.get_field(KnowledgeBaseConstants::CONTENTS_FIELD).is_ok());
     }
 
     #[test]
@@ -594,8 +522,7 @@ mod tests {
 
         let kb_doc = KbDocFile::from_markdown(
             "test.md".to_string(),
-            "---\ntitle: Test Title\nurl: /test\nkeywords: android, test\n---\nTest content here"
-                .to_string(),
+            "---\ntitle: Test Title\nurl: /test\nkeywords: android, test\n---\nTest content here".to_string()
         );
 
         indexer.add_document(&writer, &kb_doc).unwrap();
@@ -668,8 +595,7 @@ mod tests {
 
         let kb_doc = KbDocFile::from_markdown(
             "test.md".to_string(),
-            "---\ntitle: Test Title\nurl: /test/url\nkeywords: test keywords\n---\nTest content"
-                .to_string(),
+            "---\ntitle: Test Title\nurl: /test/url\nkeywords: test keywords\n---\nTest content".to_string()
         );
 
         indexer.add_document(&writer, &kb_doc).unwrap();
