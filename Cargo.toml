@@ -47,7 +47,7 @@ futures-util = "0.3"
 
 # Error handling
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
