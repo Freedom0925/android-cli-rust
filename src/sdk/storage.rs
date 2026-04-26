@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, BufReader};
 use sha1::{Sha1, Digest};
 use anyhow::{Result, Context};
 use walkdir::WalkDir;
@@ -130,33 +130,49 @@ impl Storage {
         let archive_path = self.archives_dir.join(format!("{}.zip", sha));
         let unzipped_path = self.unzipped_dir.join(sha);
 
+        // Debug output
+        #[cfg(debug_assertions)]
+        eprintln!("DEBUG: unzip - archive_path={}", archive_path.display());
+        #[cfg(debug_assertions)]
+        eprintln!("DEBUG: unzip - unzipped_path={}", unzipped_path.display());
+        #[cfg(debug_assertions)]
+        eprintln!("DEBUG: unzip - unzipped_dir={}", self.unzipped_dir.display());
+
+        // Check if already unzipped with content
         if unzipped_path.exists() {
-            return Ok(unzipped_path); // Already unzipped
+            let has_content = std::fs::read_dir(&unzipped_path)
+                .map(|mut dir| dir.next().is_some())
+                .unwrap_or(false);
+            if has_content {
+                #[cfg(debug_assertions)]
+                eprintln!("DEBUG: unzip - already exists with content");
+                return Ok(unzipped_path);
+            }
         }
 
-        fs::create_dir_all(&unzipped_path)?;
+        // Ensure parent directory exists
+        fs::create_dir_all(&self.unzipped_dir)
+            .with_context(|| format!("Failed to create unzipped_dir: {}", self.unzipped_dir.display()))?;
+
+        // Create target directory
+        fs::create_dir_all(&unzipped_path)
+            .with_context(|| format!("Failed to create unzipped_path: {}", unzipped_path.display()))?;
 
         let file = fs::File::open(&archive_path)
             .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
 
-        let mut archive = zip::ZipArchive::new(file)
+        // Use BufReader for better performance and compatibility with zip crate
+        let reader = BufReader::new(file);
+        let mut archive = zip::ZipArchive::new(reader)
             .with_context(|| format!("Failed to read ZIP archive: {}", archive_path.display()))?;
+
+        #[cfg(debug_assertions)]
+        eprintln!("DEBUG: unzip - archive has {} entries", archive.len());
 
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
             let outpath = match file.enclosed_name() {
-                Some(path) => {
-                    let full_path = unzipped_path.join(path);
-                    // Security: Verify path doesn't escape target directory
-                    let canonical_unzipped = unzipped_path.canonicalize()
-                        .unwrap_or_else(|_| unzipped_path.clone());
-                    // For paths that don't exist yet, check the prefix
-                    if !full_path.starts_with(&canonical_unzipped) {
-                        // Skip potentially malicious path traversal attempts
-                        continue;
-                    }
-                    full_path
-                }
+                Some(path) => unzipped_path.join(path),
                 None => continue,
             };
 
@@ -172,6 +188,9 @@ impl Storage {
                 std::io::copy(&mut file, &mut outfile)?;
             }
         }
+
+        #[cfg(debug_assertions)]
+        eprintln!("DEBUG: unzip - completed successfully");
 
         Ok(unzipped_path)
     }
@@ -189,10 +208,20 @@ impl Storage {
         // Copy the unzipped content
         fs::create_dir_all(&target_path)?;
 
-        for entry in WalkDir::new(&unzipped_path) {
+        // Find the actual content directory (skip top-level directory in ZIP)
+        // ZIP structure is typically: android-<version>/<files>
+        // We want to copy <files> directly to target_path
+        let content_dir = fs::read_dir(&unzipped_path)?
+            .next()
+            .and_then(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(|| unzipped_path.clone());
+
+        for entry in WalkDir::new(&content_dir) {
             let entry = entry?;
             let path = entry.path();
-            let relative = path.strip_prefix(&unzipped_path)?;
+            let relative = path.strip_prefix(&content_dir)?;
             let dest = target_path.join(relative);
 
             if entry.file_type().is_dir() {

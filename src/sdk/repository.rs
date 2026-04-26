@@ -33,17 +33,17 @@ impl Channel {
 /// Platform (OS)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
-    Linux = 0,
-    Mac = 1,
-    Windows = 2,
+    Linux = 1,
+    Mac = 2,
+    Windows = 3,
 }
 
 impl Platform {
     pub fn from_int(i: i32) -> Self {
         match i {
-            0 => Platform::Linux,
-            1 => Platform::Mac,
-            2 => Platform::Windows,
+            1 => Platform::Linux,
+            2 => Platform::Mac,
+            3 => Platform::Windows,
             _ => Platform::Linux,
         }
     }
@@ -61,17 +61,17 @@ impl Platform {
 /// Architecture
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
-    X86 = 0,
-    X64 = 1,
-    Aarch64 = 2,
+    X86 = 1,
+    X64 = 2,
+    Aarch64 = 3,
 }
 
 impl Architecture {
     pub fn from_int(i: i32) -> Self {
         match i {
-            0 => Architecture::X86,
-            1 => Architecture::X64,
-            2 => Architecture::Aarch64,
+            1 => Architecture::X86,
+            2 => Architecture::X64,
+            3 => Architecture::Aarch64,
             _ => Architecture::X64,
         }
     }
@@ -124,10 +124,25 @@ pub struct Package {
 
 impl Package {
     /// Find archive matching current platform
+    /// On macOS aarch64, if no native arm64 archive exists, fallback to x64 (Rosetta)
     pub fn find_archive(&self, platform: Platform, arch: Architecture) -> Option<&Archive> {
-        self.archives.iter().find(|a| {
+        // First try exact match
+        let exact = self.archives.iter().find(|a| {
             a.host_os == platform && a.host_arch == arch
-        })
+        });
+
+        if exact.is_some() {
+            return exact;
+        }
+
+        // On macOS aarch64, fallback to x64 (can run via Rosetta)
+        if platform == Platform::Mac && arch == Architecture::Aarch64 {
+            return self.archives.iter().find(|a| {
+                a.host_os == Platform::Mac && a.host_arch == Architecture::X64
+            });
+        }
+
+        None
     }
 
     /// Check if this package matches a request
@@ -337,8 +352,14 @@ impl Repository {
                     }
                     cursor.set_position((start + len as usize) as u64);
                 }
-                2 => host_os = Platform::from_int(read_varint(&mut cursor).ok()? as i32),
-                3 => host_arch = Architecture::from_int(read_varint(&mut cursor).ok()? as i32),
+                2 => {
+                    let os_val = read_varint(&mut cursor).ok()? as i32;
+                    host_os = Platform::from_int(os_val);
+                }
+                3 => {
+                    let arch_val = read_varint(&mut cursor).ok()? as i32;
+                    host_arch = Architecture::from_int(arch_val);
+                }
                 _ => { skip_field(&mut cursor, wire_type).ok(); }
             }
         }
@@ -423,6 +444,9 @@ impl Repository {
     pub fn resolve(&self, request: &Sdk, channel: Channel, base_url: &str) -> Sdk {
         let mut resolved_entries = Vec::new();
 
+        let current_platform = Platform::current();
+        let current_arch = Architecture::current();
+
         for entry in &request.entries {
             // Find matching package
             let pkg = if entry.revision.major > 0 {
@@ -432,8 +456,18 @@ impl Repository {
             };
 
             if let Some(pkg) = pkg {
+                // Debug: print available archives
+                #[cfg(debug_assertions)]
+                {
+                    eprintln!("Package: {}", pkg.path);
+                    for archive in &pkg.archives {
+                        eprintln!("  Archive: os={}, arch={}", archive.host_os as i32, archive.host_arch as i32);
+                    }
+                    eprintln!("  Looking for: os={}, arch={}", current_platform as i32, current_arch as i32);
+                }
+
                 // Find archive for current platform
-                let archive = pkg.find_archive(Platform::current(), Architecture::current());
+                let archive = pkg.find_archive(current_platform, current_arch);
 
                 if let Some(archive) = archive {
                     let full_url = if archive.artifact.url.starts_with("http") {
