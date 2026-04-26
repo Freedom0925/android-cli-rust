@@ -90,11 +90,12 @@ jobs:
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
           cd target/${{ matrix.target }}/release
           VERSION="${GITHUB_REF_NAME}"
           7z a android-${VERSION}-${{ matrix.artifact }}.zip android.exe
-          mv android-${VERSION}-${{ matrix.artifact }}.zip $env:GITHUB_WORKSPACE
+          mv android-${VERSION}-${{ matrix.artifact }}.zip "$GITHUB_WORKSPACE"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
