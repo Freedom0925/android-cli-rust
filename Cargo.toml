@@ -13,7 +13,7 @@ clap = { version = "4", features = ["derive", "string"] }
 reqwest = { version = "0.12", features = ["blocking", "stream", "rustls-tls"], default-features = false }
 
 # Protobuf support
-prost = "0.12"
+prost = "0.14"
 
 # SHA-1 hashing for CAS storage
 sha1 = "0.10"
