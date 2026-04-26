@@ -12,7 +12,6 @@ pub mod layout;
 pub mod metrics;
 pub mod screen;
 pub mod sdk;
-pub mod services;
 pub mod skills;
 pub mod template;
 pub mod update;
