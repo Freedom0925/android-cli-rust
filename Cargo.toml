@@ -34,7 +34,7 @@ indicatif = "0.18"
 tempfile = "3"
 
 # User directories
-dirs = "6"
+dirs = "7"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
